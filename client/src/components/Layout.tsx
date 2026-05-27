@@ -9,7 +9,9 @@ interface Props {
   onRemove?: () => void;
   onMoveLeft?: () => void;
   onMoveRight?: () => void;
+  onShrinkLeft?: () => void;
   onExtendLeft?: () => void;
+  onShrinkRight?: () => void;
   onExtendRight?: () => void;
   canEdit?: boolean;
 }
@@ -22,7 +24,9 @@ export function Layout({
   onRemove,
   onMoveLeft,
   onMoveRight,
+  onShrinkLeft,
   onExtendLeft,
+  onShrinkRight,
   onExtendRight,
   canEdit
 }: Props) {
@@ -55,21 +59,39 @@ export function Layout({
               >
                 ▶
               </button>
+              <span className="header-separator" />
               <button
                 className="header-btn"
                 disabled={!hasSelection}
                 onClick={onExtendLeft}
-                title="Extend left"
+                title="Extend left (start earlier)"
               >
-                ↤
+                ⇤
+              </button>
+              <button
+                className="header-btn"
+                disabled={!hasSelection}
+                onClick={onShrinkLeft}
+                title="Shrink left (start later)"
+              >
+                ⇥
+              </button>
+              <span className="header-separator" />
+              <button
+                className="header-btn"
+                disabled={!hasSelection}
+                onClick={onShrinkRight}
+                title="Shrink right (end earlier)"
+              >
+                ⇤
               </button>
               <button
                 className="header-btn"
                 disabled={!hasSelection}
                 onClick={onExtendRight}
-                title="Extend right"
+                title="Extend right (end later)"
               >
-                ↦
+                ⇥
               </button>
             </>
           )}

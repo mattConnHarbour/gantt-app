@@ -50,6 +50,13 @@ body {
 .header-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.header-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
 }
 
 .header-btn {

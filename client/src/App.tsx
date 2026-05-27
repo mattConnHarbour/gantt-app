@@ -72,6 +72,24 @@ export function App() {
     }
   };
 
+  const handleShrinkLeft = async () => {
+    if (selectedTicket) {
+      const newStart = shiftDate(selectedTicket.startDate, 1);
+      if (newStart < selectedTicket.endDate) {
+        await updateTicket(selectedTicket.id, { startDate: newStart });
+      }
+    }
+  };
+
+  const handleShrinkRight = async () => {
+    if (selectedTicket) {
+      const newEnd = shiftDate(selectedTicket.endDate, -1);
+      if (newEnd > selectedTicket.startDate) {
+        await updateTicket(selectedTicket.id, { endDate: newEnd });
+      }
+    }
+  };
+
   const handleExtendRight = async () => {
     if (selectedTicket) {
       await updateTicket(selectedTicket.id, {
@@ -120,7 +138,9 @@ export function App() {
       onRemove={canEdit ? handleRemoveSelected : undefined}
       onMoveLeft={canEdit ? handleMoveLeft : undefined}
       onMoveRight={canEdit ? handleMoveRight : undefined}
+      onShrinkLeft={canEdit ? handleShrinkLeft : undefined}
       onExtendLeft={canEdit ? handleExtendLeft : undefined}
+      onShrinkRight={canEdit ? handleShrinkRight : undefined}
       onExtendRight={canEdit ? handleExtendRight : undefined}
       canEdit={canEdit}
       sidebar={
