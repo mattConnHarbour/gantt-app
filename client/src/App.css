@@ -655,6 +655,11 @@ body {
   position: absolute;
   top: 0;
   z-index: 20;
+  pointer-events: auto;
+}
+
+.gantt-bar .bar-content {
+  pointer-events: auto;
 }
 
 .gantt-bar .resize-handle.left {

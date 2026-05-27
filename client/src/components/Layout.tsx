@@ -5,14 +5,29 @@ interface Props {
   sidebar: React.ReactNode;
   main: React.ReactNode;
   selectedTicketUrl?: string;
+  hasSelection?: boolean;
   onRemove?: () => void;
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
+  onExtendLeft?: () => void;
+  onExtendRight?: () => void;
   canEdit?: boolean;
 }
 
-export function Layout({ sidebar, main, selectedTicketUrl, onRemove, canEdit }: Props) {
+export function Layout({
+  sidebar,
+  main,
+  selectedTicketUrl,
+  hasSelection,
+  onRemove,
+  onMoveLeft,
+  onMoveRight,
+  onExtendLeft,
+  onExtendRight,
+  canEdit
+}: Props) {
   const [showSidebar, setShowSidebar] = useState(true);
   const { user, signOut } = useAuth();
-  const hasSelection = !!selectedTicketUrl;
 
   return (
     <div className="layout">
@@ -22,6 +37,42 @@ export function Layout({ sidebar, main, selectedTicketUrl, onRemove, canEdit }: 
         </button>
         <h1>Gantt Chart</h1>
         <div className="header-actions">
+          {canEdit && (
+            <>
+              <button
+                className="header-btn"
+                disabled={!hasSelection}
+                onClick={onMoveLeft}
+                title="Move left"
+              >
+                ◀
+              </button>
+              <button
+                className="header-btn"
+                disabled={!hasSelection}
+                onClick={onMoveRight}
+                title="Move right"
+              >
+                ▶
+              </button>
+              <button
+                className="header-btn"
+                disabled={!hasSelection}
+                onClick={onExtendLeft}
+                title="Extend left"
+              >
+                ↤
+              </button>
+              <button
+                className="header-btn"
+                disabled={!hasSelection}
+                onClick={onExtendRight}
+                title="Extend right"
+              >
+                ↦
+              </button>
+            </>
+          )}
           <button
             className="header-btn"
             disabled={!hasSelection}

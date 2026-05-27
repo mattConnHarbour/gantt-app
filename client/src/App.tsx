@@ -40,6 +40,46 @@ export function App() {
     }
   };
 
+  const shiftDate = (dateStr: string, days: number): string => {
+    const date = new Date(dateStr);
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleMoveLeft = async () => {
+    if (selectedTicket) {
+      await updateTicket(selectedTicket.id, {
+        startDate: shiftDate(selectedTicket.startDate, -1),
+        endDate: shiftDate(selectedTicket.endDate, -1),
+      });
+    }
+  };
+
+  const handleMoveRight = async () => {
+    if (selectedTicket) {
+      await updateTicket(selectedTicket.id, {
+        startDate: shiftDate(selectedTicket.startDate, 1),
+        endDate: shiftDate(selectedTicket.endDate, 1),
+      });
+    }
+  };
+
+  const handleExtendLeft = async () => {
+    if (selectedTicket) {
+      await updateTicket(selectedTicket.id, {
+        startDate: shiftDate(selectedTicket.startDate, -1),
+      });
+    }
+  };
+
+  const handleExtendRight = async () => {
+    if (selectedTicket) {
+      await updateTicket(selectedTicket.id, {
+        endDate: shiftDate(selectedTicket.endDate, 1),
+      });
+    }
+  };
+
   const handleDropLinearTicket = async (linearTicket: LinearTicket, startDate: string) => {
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 7);
@@ -76,7 +116,12 @@ export function App() {
   return (
     <Layout
       selectedTicketUrl={selectedTicket?.linearUrl}
+      hasSelection={!!selectedTicket}
       onRemove={canEdit ? handleRemoveSelected : undefined}
+      onMoveLeft={canEdit ? handleMoveLeft : undefined}
+      onMoveRight={canEdit ? handleMoveRight : undefined}
+      onExtendLeft={canEdit ? handleExtendLeft : undefined}
+      onExtendRight={canEdit ? handleExtendRight : undefined}
       canEdit={canEdit}
       sidebar={
         <TicketList
