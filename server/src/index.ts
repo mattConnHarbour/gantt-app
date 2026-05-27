@@ -10,6 +10,7 @@ const fastify = Fastify({
 
 await fastify.register(cors, {
   origin: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 });
 
 // Health check endpoint
