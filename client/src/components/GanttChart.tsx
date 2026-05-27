@@ -57,7 +57,7 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
       const x = e.clientX - rect.left + scrollEl.scrollLeft;
       const startDate = getPositionDate(x);
 
-      await onDropLinearTicket(linearTicket, formatDate(startDate));
+      await onDropLinearTicket?.(linearTicket, formatDate(startDate));
     } catch (err) {
       console.error('Drop failed:', err);
     }
@@ -177,7 +177,7 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
       setDragState(null);
 
       if (newStartDate !== ticket.startDate || newEndDate !== ticket.endDate) {
-        await onUpdate(ticket.id, { startDate: newStartDate, endDate: newEndDate });
+        await onUpdate?.(ticket.id, { startDate: newStartDate, endDate: newEndDate });
       }
     },
     [dragState, tickets, config.dayWidth, onUpdate]
