@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import * as storage from '../services/storage.js';
+import * as linear from '../services/linear.js';
 import type { GanttTicket } from '../types.js';
 
 interface TicketParams {
@@ -14,6 +15,7 @@ interface CreateTicketBody {
   endDate: string;
   linearUrl?: string;
   color?: string;
+  customer?: string;
 }
 
 interface UpdateTicketBody {
@@ -23,6 +25,7 @@ interface UpdateTicketBody {
   endDate?: string;
   linearUrl?: string;
   color?: string;
+  customer?: string;
 }
 
 export async function ticketRoutes(fastify: FastifyInstance): Promise<void> {
@@ -42,7 +45,7 @@ export async function ticketRoutes(fastify: FastifyInstance): Promise<void> {
 
   // POST /api/tickets - Create a new ticket
   fastify.post<{ Body: CreateTicketBody }>('/api/tickets', async (request, reply) => {
-    const { id, title, description, startDate, endDate, linearUrl, color } = request.body;
+    const { id, title, description, startDate, endDate, linearUrl, color, customer } = request.body;
 
     if (!id || !title || !startDate || !endDate) {
       return reply.status(400).send({ error: 'Missing required fields: id, title, startDate, endDate' });
@@ -57,6 +60,7 @@ export async function ticketRoutes(fastify: FastifyInstance): Promise<void> {
         endDate,
         linearUrl,
         color,
+        customer,
       });
       return reply.status(201).send(ticket);
     } catch (err) {
@@ -86,5 +90,31 @@ export async function ticketRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: 'Ticket not found' });
     }
     return { success: true };
+  });
+
+  // POST /api/tickets/sync-customers - Backfill customer data from Linear
+  fastify.post('/api/tickets/sync-customers', async () => {
+    const tickets = await storage.getAllTickets();
+    const linearTickets = await linear.fetchTicketsByAssignee('');
+
+    // Create a map of identifier to customer
+    const customerMap = new Map<string, string>();
+    for (const lt of linearTickets) {
+      if (lt.customer) {
+        customerMap.set(lt.identifier, lt.customer);
+      }
+    }
+
+    // Update tickets that don't have customer data
+    let updated = 0;
+    for (const ticket of tickets) {
+      const customer = customerMap.get(ticket.id);
+      if (customer && !ticket.customer) {
+        await storage.updateTicket(ticket.id, { customer });
+        updated++;
+      }
+    }
+
+    return { updated, total: tickets.length };
   });
 }

@@ -559,6 +559,8 @@ body {
   transition: box-shadow 0.15s, transform 0.15s;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   overflow: visible;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .gantt-bar:hover {
@@ -579,44 +581,57 @@ body {
 
 .gantt-bar .bar-content {
   flex: 1;
-  padding: 0 8px;
+  padding: 0 20px;
   overflow: visible;
   display: flex;
   gap: 8px;
   align-items: center;
   touch-action: none;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .gantt-bar .bar-id {
   font-size: 11px;
-  font-weight: 600;
-  opacity: 0.9;
+  font-weight: 700;
   flex-shrink: 0;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 .gantt-bar .bar-title {
   font-size: 12px;
+  font-weight: 600;
   white-space: nowrap;
-  opacity: 0.9;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 6px;
+  border-radius: 3px;
 }
 
 .gantt-bar .resize-handle {
-  width: 12px;
+  width: 16px;
   height: 100%;
   cursor: ew-resize;
   flex-shrink: 0;
   touch-action: none;
+  position: absolute;
+  top: 0;
+  z-index: 20;
 }
 
 .gantt-bar .resize-handle.left {
+  left: 0;
   border-radius: 6px 0 0 6px;
 }
 
 .gantt-bar .resize-handle.right {
+  right: 0;
   border-radius: 0 6px 6px 0;
 }
 
 .gantt-bar .resize-handle:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.2);
 }

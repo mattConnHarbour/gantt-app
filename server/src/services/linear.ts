@@ -72,8 +72,16 @@ async function fetchCustomerMap(): Promise<Map<string, string>> {
   const result = await client.request<CustomerNeedsResponse>(CUSTOMER_NEEDS_QUERY);
 
   for (const issue of result.issues.nodes) {
-    if (issue.needs.nodes.length > 0 && issue.needs.nodes[0].customer) {
-      customerMap.set(issue.id, issue.needs.nodes[0].customer.name);
+    if (issue.needs.nodes.length > 0) {
+      // Collect unique customer names and join with comma
+      const customers = [...new Set(
+        issue.needs.nodes
+          .filter(n => n.customer?.name)
+          .map(n => n.customer.name)
+      )];
+      if (customers.length > 0) {
+        customerMap.set(issue.id, customers.join(', '));
+      }
     }
   }
 
