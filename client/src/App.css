@@ -77,6 +77,19 @@ body {
   border-color: var(--error);
 }
 
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
 .menu-toggle {
   display: none;
   background: none;
@@ -132,6 +145,28 @@ body {
   .sidebar.open {
     transform: translateX(0);
   }
+}
+
+/* Sign In */
+.sign-in-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--bg-primary);
+}
+
+.sign-in-box {
+  background: var(--bg-secondary);
+  padding: 48px;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+}
+
+.sign-in-box h1 {
+  margin-bottom: 24px;
+  font-size: 24px;
 }
 
 /* Loading & Error */

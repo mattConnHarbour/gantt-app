@@ -4,10 +4,11 @@ import { useGantt } from '../hooks/useGantt';
 
 interface Props {
   tickets: GanttTicket[];
-  onUpdate: (id: string, updates: { startDate?: string; endDate?: string }) => Promise<unknown>;
-  onDropLinearTicket: (ticket: LinearTicket, startDate: string) => Promise<void>;
+  onUpdate?: (id: string, updates: { startDate?: string; endDate?: string }) => Promise<unknown>;
+  onDropLinearTicket?: (ticket: LinearTicket, startDate: string) => Promise<void>;
   selectedId?: string;
   onSelect?: (ticket: GanttTicket) => void;
+  canEdit?: boolean;
 }
 
 interface DragState {
@@ -20,7 +21,7 @@ interface DragState {
 
 const formatDate = (d: Date) => d.toISOString().split('T')[0];
 
-export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, onSelect }: Props) {
+export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, onSelect, canEdit }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -28,10 +29,11 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
   const { config, days, totalWidth, totalHeight, getDatePosition, getPositionDate } = useGantt(tickets);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!canEdit) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
     setDropHighlight(true);
-  }, []);
+  }, [canEdit]);
 
   const handleDragLeave = useCallback(() => {
     setDropHighlight(false);
@@ -63,6 +65,7 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, ticket: GanttTicket, type: DragState['type']) => {
+      if (!canEdit) return;
       e.preventDefault();
       e.stopPropagation();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -75,7 +78,7 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
         initialEndDate: ticket.endDate,
       });
     },
-    []
+    [canEdit]
   );
 
   const handlePointerMove = useCallback(

@@ -4,12 +4,13 @@ import * as api from '../api';
 
 interface Props {
   tickets: GanttTicket[];
-  onDelete: (id: string) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
   onSelect?: (ticket: GanttTicket) => void;
   selectedId?: string;
+  canEdit?: boolean;
 }
 
-export function TicketList({ tickets, onDelete, onSelect, selectedId }: Props) {
+export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }: Props) {
   const [filter, setFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [linearTickets, setLinearTickets] = useState<LinearTicket[]>([]);
@@ -121,9 +122,9 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId }: Props) {
             filteredAvailable.map((ticket) => (
               <div
                 key={ticket.id}
-                className="ticket-item linear-ticket"
-                draggable
-                onDragStart={(e) => handleDragStart(e, ticket)}
+                className={`ticket-item linear-ticket ${!canEdit ? 'readonly' : ''}`}
+                draggable={canEdit}
+                onDragStart={canEdit ? (e) => handleDragStart(e, ticket) : undefined}
               >
                 <div className="ticket-header">
                   <span className="ticket-id">
@@ -133,7 +134,7 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId }: Props) {
                   <span className="ticket-state">{ticket.state?.name || 'Unknown'}</span>
                 </div>
                 <div className="ticket-title">{ticket.title}</div>
-                <div className="drag-hint">Drag to calendar</div>
+                {canEdit && <div className="drag-hint">Drag to calendar</div>}
               </div>
             ))
           )}
@@ -155,16 +156,18 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId }: Props) {
               >
                 <div className="ticket-header">
                   <span className="ticket-id">{ticket.id}</span>
-                  <button
-                    className="delete-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(ticket.id);
-                    }}
-                    title="Remove"
-                  >
-                    ×
-                  </button>
+                  {canEdit && onDelete && (
+                    <button
+                      className="delete-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete(ticket.id);
+                      }}
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
                 <div className="ticket-title">{ticket.title}</div>
                 <div className="ticket-dates">

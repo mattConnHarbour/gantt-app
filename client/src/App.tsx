@@ -2,15 +2,30 @@ import { useState } from 'react';
 import { Layout } from './components/Layout';
 import { TicketList } from './components/TicketList';
 import { GanttChart } from './components/GanttChart';
+import { SignIn } from './components/SignIn';
 import { useTickets } from './hooks/useTickets';
+import { useAuth } from './contexts/AuthContext';
 import type { GanttTicket, LinearTicket } from './types';
 import './App.css';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
 export function App() {
+  const { user, isLoading: authLoading, canEdit } = useAuth();
   const { tickets, loading, error, addTicket, updateTicket, removeTicket } = useTickets();
   const [selectedId, setSelectedId] = useState<string | undefined>();
+
+  if (authLoading) {
+    return (
+      <div className="loading">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <SignIn />;
+  }
 
   const handleSelect = (ticket: GanttTicket) => {
     setSelectedId(ticket.id === selectedId ? undefined : ticket.id);
@@ -61,22 +76,25 @@ export function App() {
   return (
     <Layout
       selectedTicketUrl={selectedTicket?.linearUrl}
-      onRemove={handleRemoveSelected}
+      onRemove={canEdit ? handleRemoveSelected : undefined}
+      canEdit={canEdit}
       sidebar={
         <TicketList
           tickets={tickets}
-          onDelete={removeTicket}
+          onDelete={canEdit ? removeTicket : undefined}
           onSelect={handleSelect}
           selectedId={selectedId}
+          canEdit={canEdit}
         />
       }
       main={
         <GanttChart
           tickets={tickets}
-          onUpdate={updateTicket}
-          onDropLinearTicket={handleDropLinearTicket}
+          onUpdate={canEdit ? updateTicket : undefined}
+          onDropLinearTicket={canEdit ? handleDropLinearTicket : undefined}
           selectedId={selectedId}
           onSelect={handleSelect}
+          canEdit={canEdit}
         />
       }
     />

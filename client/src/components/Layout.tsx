@@ -1,14 +1,17 @@
 import { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
   sidebar: React.ReactNode;
   main: React.ReactNode;
   selectedTicketUrl?: string;
   onRemove?: () => void;
+  canEdit?: boolean;
 }
 
-export function Layout({ sidebar, main, selectedTicketUrl, onRemove }: Props) {
+export function Layout({ sidebar, main, selectedTicketUrl, onRemove, canEdit }: Props) {
   const [showSidebar, setShowSidebar] = useState(true);
+  const { user, signOut } = useAuth();
   const hasSelection = !!selectedTicketUrl;
 
   return (
@@ -26,13 +29,23 @@ export function Layout({ sidebar, main, selectedTicketUrl, onRemove }: Props) {
           >
             Open
           </button>
-          <button
-            className="header-btn header-btn-danger"
-            disabled={!hasSelection}
-            onClick={onRemove}
-          >
-            Remove
-          </button>
+          {canEdit && (
+            <button
+              className="header-btn header-btn-danger"
+              disabled={!hasSelection}
+              onClick={onRemove}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        <div className="header-user">
+          {user && (
+            <>
+              <img src={user.picture} alt={user.name} className="user-avatar" />
+              <button className="header-btn" onClick={signOut}>Sign Out</button>
+            </>
+          )}
         </div>
       </header>
       <div className="layout-body">
