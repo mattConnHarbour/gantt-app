@@ -124,6 +124,54 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }:
 
   return (
     <div className="ticket-list">
+      <div className="ticket-section">
+        <h2>Virtual Tickets</h2>
+        <form className="virtual-ticket-form" onSubmit={handleAddVirtualTicket}>
+          <input
+            type="text"
+            placeholder="Title"
+            value={newVirtualTitle}
+            onChange={(e) => setNewVirtualTitle(e.target.value)}
+          />
+          <input
+            type="text"
+            placeholder="Customer (optional)"
+            value={newVirtualCustomer}
+            onChange={(e) => setNewVirtualCustomer(e.target.value)}
+          />
+          <button type="submit" disabled={!newVirtualTitle.trim()}>+</button>
+        </form>
+        <div className="tickets">
+          {virtualTickets.length === 0 ? (
+            <p className="empty">Create tickets without Linear</p>
+          ) : (
+            virtualTickets.map((ticket, index) => (
+              <div
+                key={index}
+                className="ticket-item virtual-ticket"
+                draggable={canEdit}
+                onDragStart={canEdit ? (e) => handleVirtualDragStart(e, ticket, index) : undefined}
+              >
+                <div className="ticket-header">
+                  <span className="ticket-id">
+                    Virtual
+                    {ticket.customer && <span className="ticket-customer"> [{ticket.customer}]</span>}
+                  </span>
+                  <button
+                    className="delete-btn"
+                    onClick={() => setVirtualTickets(prev => prev.filter((_, i) => i !== index))}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="ticket-title">{ticket.title}</div>
+                {canEdit && <div className="drag-hint">Drag to calendar</div>}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       <input
         type="text"
         className="filter-input"
@@ -179,56 +227,6 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }:
           )}
         </div>
       </div>
-
-      {canEdit && (
-        <div className="ticket-section">
-          <h2>Virtual Tickets</h2>
-          <form className="virtual-ticket-form" onSubmit={handleAddVirtualTicket}>
-            <input
-              type="text"
-              placeholder="Title"
-              value={newVirtualTitle}
-              onChange={(e) => setNewVirtualTitle(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="Customer (optional)"
-              value={newVirtualCustomer}
-              onChange={(e) => setNewVirtualCustomer(e.target.value)}
-            />
-            <button type="submit" disabled={!newVirtualTitle.trim()}>+</button>
-          </form>
-          <div className="tickets">
-            {virtualTickets.length === 0 ? (
-              <p className="empty">Create tickets without Linear</p>
-            ) : (
-              virtualTickets.map((ticket, index) => (
-                <div
-                  key={index}
-                  className="ticket-item virtual-ticket"
-                  draggable
-                  onDragStart={(e) => handleVirtualDragStart(e, ticket, index)}
-                >
-                  <div className="ticket-header">
-                    <span className="ticket-id">
-                      Virtual
-                      {ticket.customer && <span className="ticket-customer"> [{ticket.customer}]</span>}
-                    </span>
-                    <button
-                      className="delete-btn"
-                      onClick={() => setVirtualTickets(prev => prev.filter((_, i) => i !== index))}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="ticket-title">{ticket.title}</div>
-                  <div className="drag-hint">Drag to calendar</div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="ticket-section">
         <h2>On Calendar ({tickets.length})</h2>
