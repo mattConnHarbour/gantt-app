@@ -18,12 +18,22 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const STORAGE_KEY = 'gantt-auth-user';
+export const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
+
+const DEV_USER: User = {
+  email: 'matthew@harbourshare.com',
+  name: 'Dev User',
+  picture: '',
+  token: 'dev-token',
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(DEV_MODE ? DEV_USER : null);
+  const [isLoading, setIsLoading] = useState(!DEV_MODE);
 
   useEffect(() => {
+    if (DEV_MODE) return;
+
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
