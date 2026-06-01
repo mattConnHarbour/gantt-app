@@ -10,11 +10,19 @@ interface Props {
   canEdit?: boolean;
 }
 
+interface VirtualTicket {
+  title: string;
+  customer: string;
+}
+
 export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }: Props) {
   const [filter, setFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [linearTickets, setLinearTickets] = useState<LinearTicket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [virtualTickets, setVirtualTickets] = useState<VirtualTicket[]>([]);
+  const [newVirtualTitle, setNewVirtualTitle] = useState('');
+  const [newVirtualCustomer, setNewVirtualCustomer] = useState('');
 
   // Load tickets from server on mount
   useEffect(() => {
@@ -83,6 +91,37 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }:
     e.dataTransfer.effectAllowed = 'copy';
   };
 
+  const handleAddVirtualTicket = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVirtualTitle.trim()) return;
+
+    setVirtualTickets([...virtualTickets, {
+      title: newVirtualTitle.trim(),
+      customer: newVirtualCustomer.trim(),
+    }]);
+    setNewVirtualTitle('');
+    setNewVirtualCustomer('');
+  };
+
+  const handleVirtualDragStart = (e: React.DragEvent, ticket: VirtualTicket, index: number) => {
+    const virtualId = `V-${Date.now()}-${index}`;
+    const linearTicket: LinearTicket = {
+      id: virtualId,
+      identifier: virtualId,
+      title: ticket.title,
+      url: '',
+      state: { name: 'Virtual' },
+      customer: ticket.customer || undefined,
+    };
+    e.dataTransfer.setData('application/json', JSON.stringify(linearTicket));
+    e.dataTransfer.effectAllowed = 'copy';
+
+    // Remove from virtual tickets list after drag starts
+    setTimeout(() => {
+      setVirtualTickets(prev => prev.filter((_, i) => i !== index));
+    }, 0);
+  };
+
   return (
     <div className="ticket-list">
       <input
@@ -140,6 +179,56 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }:
           )}
         </div>
       </div>
+
+      {canEdit && (
+        <div className="ticket-section">
+          <h2>Virtual Tickets</h2>
+          <form className="virtual-ticket-form" onSubmit={handleAddVirtualTicket}>
+            <input
+              type="text"
+              placeholder="Title"
+              value={newVirtualTitle}
+              onChange={(e) => setNewVirtualTitle(e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder="Customer (optional)"
+              value={newVirtualCustomer}
+              onChange={(e) => setNewVirtualCustomer(e.target.value)}
+            />
+            <button type="submit" disabled={!newVirtualTitle.trim()}>+</button>
+          </form>
+          <div className="tickets">
+            {virtualTickets.length === 0 ? (
+              <p className="empty">Create tickets without Linear</p>
+            ) : (
+              virtualTickets.map((ticket, index) => (
+                <div
+                  key={index}
+                  className="ticket-item virtual-ticket"
+                  draggable
+                  onDragStart={(e) => handleVirtualDragStart(e, ticket, index)}
+                >
+                  <div className="ticket-header">
+                    <span className="ticket-id">
+                      Virtual
+                      {ticket.customer && <span className="ticket-customer"> [{ticket.customer}]</span>}
+                    </span>
+                    <button
+                      className="delete-btn"
+                      onClick={() => setVirtualTickets(prev => prev.filter((_, i) => i !== index))}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="ticket-title">{ticket.title}</div>
+                  <div className="drag-hint">Drag to calendar</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="ticket-section">
         <h2>On Calendar ({tickets.length})</h2>

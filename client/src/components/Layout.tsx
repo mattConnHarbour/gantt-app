@@ -97,8 +97,9 @@ export function Layout({
           )}
           <button
             className="header-btn"
-            disabled={!hasSelection}
+            disabled={!hasSelection || !selectedTicketUrl}
             onClick={() => selectedTicketUrl && window.open(selectedTicketUrl, '_blank')}
+            title={!selectedTicketUrl && hasSelection ? 'No Linear link' : 'Open in Linear'}
           >
             Open
           </button>
