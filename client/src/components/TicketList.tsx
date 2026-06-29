@@ -5,24 +5,22 @@ import * as api from '../api';
 interface Props {
   tickets: GanttTicket[];
   onDelete?: (id: string) => Promise<void>;
+  onAdd?: (ticket: LinearTicket) => Promise<void>;
+  onAddCustom?: (customer: string, title: string) => Promise<void>;
   onSelect?: (ticket: GanttTicket) => void;
   selectedId?: string;
   canEdit?: boolean;
 }
 
-interface VirtualTicket {
-  title: string;
-  customer: string;
-}
-
-export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }: Props) {
+export function TicketList({ tickets, onDelete, onAdd, onAddCustom, onSelect, selectedId, canEdit }: Props) {
   const [filter, setFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [linearTickets, setLinearTickets] = useState<LinearTicket[]>([]);
   const [loading, setLoading] = useState(true);
-  const [virtualTickets, setVirtualTickets] = useState<VirtualTicket[]>([]);
-  const [newVirtualTitle, setNewVirtualTitle] = useState('');
-  const [newVirtualCustomer, setNewVirtualCustomer] = useState('');
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customCustomer, setCustomCustomer] = useState('');
+  const [customTitle, setCustomTitle] = useState('');
+  const [customAdding, setCustomAdding] = useState(false);
 
   // Load tickets from server on mount
   useEffect(() => {
@@ -91,87 +89,23 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }:
     e.dataTransfer.effectAllowed = 'copy';
   };
 
-  const handleAddVirtualTicket = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newVirtualTitle.trim()) return;
-
-    setVirtualTickets([...virtualTickets, {
-      title: newVirtualTitle.trim(),
-      customer: newVirtualCustomer.trim(),
-    }]);
-    setNewVirtualTitle('');
-    setNewVirtualCustomer('');
-  };
-
-  const handleVirtualDragStart = (e: React.DragEvent, ticket: VirtualTicket, index: number) => {
-    const virtualId = `V-${Date.now()}-${index}`;
-    const linearTicket: LinearTicket = {
-      id: virtualId,
-      identifier: virtualId,
-      title: ticket.title,
-      url: '',
-      state: { name: 'Virtual' },
-      customer: ticket.customer || undefined,
-    };
-    e.dataTransfer.setData('application/json', JSON.stringify(linearTicket));
-    e.dataTransfer.effectAllowed = 'copy';
-
-    // Remove from virtual tickets list after drag starts
-    setTimeout(() => {
-      setVirtualTickets(prev => prev.filter((_, i) => i !== index));
-    }, 0);
+  const handleAddCustom = async () => {
+    if (!customCustomer.trim() || !customTitle.trim() || !onAddCustom) return;
+    setCustomAdding(true);
+    try {
+      await onAddCustom(customCustomer.trim(), customTitle.trim());
+      setCustomCustomer('');
+      setCustomTitle('');
+      setShowCustomForm(false);
+    } catch (err) {
+      console.error('Failed to add custom item:', err);
+    } finally {
+      setCustomAdding(false);
+    }
   };
 
   return (
     <div className="ticket-list">
-      <div className="ticket-section">
-        <h2>Virtual Tickets</h2>
-        <form className="virtual-ticket-form" onSubmit={handleAddVirtualTicket}>
-          <input
-            type="text"
-            placeholder="Title"
-            value={newVirtualTitle}
-            onChange={(e) => setNewVirtualTitle(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="Customer (optional)"
-            value={newVirtualCustomer}
-            onChange={(e) => setNewVirtualCustomer(e.target.value)}
-          />
-          <button type="submit" disabled={!newVirtualTitle.trim()}>+</button>
-        </form>
-        <div className="tickets">
-          {virtualTickets.length === 0 ? (
-            <p className="empty">Create tickets without Linear</p>
-          ) : (
-            virtualTickets.map((ticket, index) => (
-              <div
-                key={index}
-                className="ticket-item virtual-ticket"
-                draggable={canEdit}
-                onDragStart={canEdit ? (e) => handleVirtualDragStart(e, ticket, index) : undefined}
-              >
-                <div className="ticket-header">
-                  <span className="ticket-id">
-                    Virtual
-                    {ticket.customer && <span className="ticket-customer"> [{ticket.customer}]</span>}
-                  </span>
-                  <button
-                    className="delete-btn"
-                    onClick={() => setVirtualTickets(prev => prev.filter((_, i) => i !== index))}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="ticket-title">{ticket.title}</div>
-                {canEdit && <div className="drag-hint">Drag to calendar</div>}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
       <input
         type="text"
         className="filter-input"
@@ -191,6 +125,48 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }:
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
+      )}
+
+      {canEdit && (
+        <div className="ticket-section custom-section">
+          <div className="section-header">
+            <h2>Add Custom Item</h2>
+            <button
+              className="toggle-form-btn"
+              onClick={() => setShowCustomForm(!showCustomForm)}
+            >
+              {showCustomForm ? '−' : '+'}
+            </button>
+          </div>
+          {showCustomForm && (
+            <div className="custom-form">
+              <input
+                type="text"
+                className="custom-input"
+                placeholder="Customer name"
+                value={customCustomer}
+                onChange={(e) => setCustomCustomer(e.target.value)}
+              />
+              <input
+                type="text"
+                className="custom-input"
+                placeholder="Title"
+                value={customTitle}
+                onChange={(e) => setCustomTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddCustom();
+                }}
+              />
+              <button
+                className="add-custom-btn"
+                onClick={handleAddCustom}
+                disabled={customAdding || !customCustomer.trim() || !customTitle.trim()}
+              >
+                {customAdding ? 'Adding...' : 'Add'}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       <div className="ticket-section">
@@ -221,7 +197,19 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }:
                   <span className="ticket-state">{ticket.state?.name || 'Unknown'}</span>
                 </div>
                 <div className="ticket-title">{ticket.title}</div>
-                {canEdit && <div className="drag-hint">Drag to calendar</div>}
+                {canEdit && (
+                  <div className="ticket-actions">
+                    <button
+                      className="add-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAdd?.(ticket);
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -237,12 +225,15 @@ export function TicketList({ tickets, onDelete, onSelect, selectedId, canEdit }:
             filteredAdded.map((ticket) => (
               <div
                 key={ticket.id}
-                className={`ticket-item ${selectedId === ticket.id ? 'selected' : ''}`}
+                className={`ticket-item ${selectedId === ticket.id ? 'selected' : ''} ${ticket.isCustom || ticket.id.startsWith('custom-') ? 'custom-item' : ''}`}
                 onClick={() => onSelect?.(ticket)}
                 style={{ borderLeftColor: ticket.color }}
               >
                 <div className="ticket-header">
-                  <span className="ticket-id">{ticket.id}</span>
+                  {!ticket.isCustom && !ticket.id.startsWith('custom-') && <span className="ticket-id">{ticket.id}</span>}
+                  {(ticket.isCustom || ticket.id.startsWith('custom-')) && ticket.customer && (
+                    <span className="ticket-customer">[{ticket.customer}]</span>
+                  )}
                   {canEdit && onDelete && (
                     <button
                       className="delete-btn"

@@ -1,14 +1,20 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useMemo } from 'react';
 import type { GanttTicket, LinearTicket } from '../types';
 import { useGantt } from '../hooks/useGantt';
 
+interface CustomerGroup {
+  customer: string;
+  tickets: GanttTicket[];
+}
+
 interface Props {
   tickets: GanttTicket[];
-  onUpdate?: (id: string, updates: { startDate?: string; endDate?: string }) => Promise<unknown>;
+  onUpdate?: (id: string, updates: { startDate?: string; endDate?: string; notes?: string }) => Promise<unknown>;
   onDropLinearTicket?: (ticket: LinearTicket, startDate: string) => Promise<void>;
   selectedId?: string;
   onSelect?: (ticket: GanttTicket) => void;
   canEdit?: boolean;
+  dayViewDate?: Date | null;
 }
 
 interface DragState {
@@ -21,12 +27,44 @@ interface DragState {
 
 const formatDate = (d: Date) => d.toISOString().split('T')[0];
 
-export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, onSelect, canEdit }: Props) {
+const GROUP_HEADER_HEIGHT = 32;
+
+export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, onSelect, canEdit, dayViewDate }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropHighlight, setDropHighlight] = useState(false);
-  const { config, days, totalWidth, totalHeight, getDatePosition, getPositionDate } = useGantt(tickets);
+  const { config, days, totalWidth, getDatePosition, getPositionDate } = useGantt(tickets, { dayViewDate: dayViewDate ?? undefined });
+
+  // Group tickets by customer
+  const customerGroups = useMemo((): CustomerGroup[] => {
+    const groupMap = new Map<string, GanttTicket[]>();
+
+    for (const ticket of tickets) {
+      const customer = ticket.customer || 'Unassigned';
+      if (!groupMap.has(customer)) {
+        groupMap.set(customer, []);
+      }
+      groupMap.get(customer)!.push(ticket);
+    }
+
+    // Sort groups alphabetically, but put 'Unassigned' at the end
+    return Array.from(groupMap.entries())
+      .sort(([a], [b]) => {
+        if (a === 'Unassigned') return 1;
+        if (b === 'Unassigned') return -1;
+        return a.localeCompare(b);
+      })
+      .map(([customer, groupTickets]) => ({ customer, tickets: groupTickets }));
+  }, [tickets]);
+
+  // Calculate total height with group headers
+  const totalHeight = useMemo(() => {
+    return config.headerHeight +
+      customerGroups.length * GROUP_HEADER_HEIGHT +
+      tickets.length * config.rowHeight;
+  }, [config.headerHeight, config.rowHeight, customerGroups.length, tickets.length]);
+
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!canEdit) return;
@@ -183,6 +221,25 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
     [dragState, tickets, config.dayWidth, onUpdate]
   );
 
+  const handleNotesBlur = useCallback(
+    async (ticketId: string, notes: string) => {
+      const ticket = tickets.find(t => t.id === ticketId);
+      if (ticket && notes !== (ticket.notes || '')) {
+        await onUpdate?.(ticketId, { notes });
+      }
+    },
+    [tickets, onUpdate]
+  );
+
+  const handleNotesKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        e.currentTarget.blur();
+      }
+    },
+    []
+  );
+
   // Today line position
   const todayPosition = getDatePosition(new Date());
 
@@ -239,48 +296,89 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
             />
           )}
 
-          {/* Ticket bars */}
+          {/* Customer groups and ticket bars */}
           <div className="gantt-bars" style={{ top: config.headerHeight }}>
-            {tickets.map((ticket, index) => {
-              const left = getDatePosition(ticket.startDate);
-              const width = getDatePosition(ticket.endDate) - left + config.dayWidth;
-              const top = index * config.rowHeight + (config.rowHeight - 36) / 2;
+            {(() => {
+              let currentY = 0;
+              return customerGroups.map((group) => {
+                const groupHeaderY = currentY;
+                currentY += GROUP_HEADER_HEIGHT;
 
-              return (
-                <div
-                  key={ticket.id}
-                  data-ticket-id={ticket.id}
-                  className={`gantt-bar ${selectedId === ticket.id ? 'selected' : ''} ${
-                    dragState?.ticketId === ticket.id ? 'dragging' : ''
-                  }`}
-                  style={{
-                    left,
-                    top,
-                    width,
-                    backgroundColor: ticket.color || '#3b82f6',
-                  }}
-                  onClick={() => onSelect?.(ticket)}
-                >
-                  <div
-                    className="resize-handle left"
-                    onPointerDown={(e) => handlePointerDown(e, ticket, 'resize-start')}
-                  />
-                  <div
-                    className="bar-content"
-                    onPointerDown={(e) => handlePointerDown(e, ticket, 'move')}
-                  >
-                    <span className="bar-id">
-                      {ticket.customer && `[${ticket.customer}] `}{ticket.id}
-                    </span>
-                    <span className="bar-title">{ticket.title}</span>
+                const groupElements = (
+                  <div key={group.customer} className="gantt-customer-group">
+                    {/* Customer group header */}
+                    <div
+                      className="gantt-group-header"
+                      style={{
+                        top: groupHeaderY,
+                        width: totalWidth,
+                        height: GROUP_HEADER_HEIGHT,
+                      }}
+                    >
+                      <span className="group-name">{group.customer}</span>
+                      <span className="group-count">{group.tickets.length}</span>
+                    </div>
+
+                    {/* Tickets in this group */}
+                    {group.tickets.map((ticket) => {
+                      const left = getDatePosition(ticket.startDate);
+                      const width = getDatePosition(ticket.endDate) - left + config.dayWidth;
+                      const top = currentY + (config.rowHeight - 56) / 2;
+                      currentY += config.rowHeight;
+
+                      return (
+                        <div
+                          key={ticket.id}
+                          data-ticket-id={ticket.id}
+                          className={`gantt-bar ${selectedId === ticket.id ? 'selected' : ''} ${
+                            dragState?.ticketId === ticket.id ? 'dragging' : ''
+                          }`}
+                          style={{
+                            left,
+                            top,
+                            width,
+                            backgroundColor: ticket.color || '#3b82f6',
+                          }}
+                          onClick={() => onSelect?.(ticket)}
+                        >
+                          <div
+                            className="resize-handle left"
+                            onPointerDown={(e) => handlePointerDown(e, ticket, 'resize-start')}
+                          />
+                          <div
+                            className="bar-content"
+                            onPointerDown={(e) => handlePointerDown(e, ticket, 'move')}
+                          >
+                            {!ticket.isCustom && !ticket.id.startsWith('custom-') && <span className="bar-id">{ticket.id}</span>}
+                            <span className="bar-title">{ticket.title}</span>
+                            {canEdit ? (
+                              <input
+                                type="text"
+                                className="bar-notes"
+                                placeholder="Add note..."
+                                defaultValue={ticket.notes || ''}
+                                onClick={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onBlur={(e) => handleNotesBlur(ticket.id, e.target.value)}
+                                onKeyDown={handleNotesKeyDown}
+                              />
+                            ) : ticket.notes ? (
+                              <span className="bar-notes-readonly">{ticket.notes}</span>
+                            ) : null}
+                          </div>
+                          <div
+                            className="resize-handle right"
+                            onPointerDown={(e) => handlePointerDown(e, ticket, 'resize-end')}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div
-                    className="resize-handle right"
-                    onPointerDown={(e) => handlePointerDown(e, ticket, 'resize-end')}
-                  />
-                </div>
-              );
-            })}
+                );
+
+                return groupElements;
+              });
+            })()}
           </div>
         </div>
       </div>

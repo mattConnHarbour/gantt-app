@@ -7,6 +7,8 @@ export interface GanttTicket {
   linearUrl?: string;
   color?: string;
   customer?: string;
+  notes?: string;
+  isCustom?: boolean;
   createdAt: string;
   updatedAt: string;
 }

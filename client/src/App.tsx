@@ -10,10 +10,59 @@ import './App.css';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
+// Generate a unique ID for custom (non-Linear) items
+function generateCustomId(): string {
+  return `custom-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+}
+
 export function App() {
   const { user, isLoading: authLoading, canEdit } = useAuth();
   const { tickets, loading, error, addTicket, updateTicket, removeTicket } = useTickets();
   const [selectedId, setSelectedId] = useState<string | undefined>();
+  const [dayViewDate, setDayViewDate] = useState<Date | null>(null);
+  const [customerFilter, setCustomerFilter] = useState<string>('');
+
+  // Extract unique customers from tickets
+  const customers = [...new Set(tickets.map(t => t.customer).filter(Boolean))] as string[];
+
+  const handleDayViewToggle = () => {
+    setDayViewDate(dayViewDate ? null : new Date());
+  };
+
+  const handleDayViewPrev = () => {
+    if (dayViewDate) {
+      const prev = new Date(dayViewDate);
+      prev.setDate(prev.getDate() - 1);
+      setDayViewDate(prev);
+    }
+  };
+
+  const handleDayViewNext = () => {
+    if (dayViewDate) {
+      const next = new Date(dayViewDate);
+      next.setDate(next.getDate() + 1);
+      setDayViewDate(next);
+    }
+  };
+
+  // Filter tickets by customer and day view
+  const filteredTickets = tickets.filter(ticket => {
+    // Customer filter
+    if (customerFilter && ticket.customer !== customerFilter) {
+      return false;
+    }
+    // Day view filter
+    if (dayViewDate) {
+      const start = new Date(ticket.startDate);
+      const end = new Date(ticket.endDate);
+      const dayStart = new Date(dayViewDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayViewDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      return start <= dayEnd && end >= dayStart;
+    }
+    return true;
+  });
 
   if (authLoading) {
     return (
@@ -40,62 +89,22 @@ export function App() {
     }
   };
 
-  const shiftDate = (dateStr: string, days: number): string => {
-    const date = new Date(dateStr);
-    date.setDate(date.getDate() + days);
-    return date.toISOString().split('T')[0];
-  };
+  const handleAddLinearTicket = async (linearTicket: LinearTicket) => {
+    const today = new Date();
+    const startDate = today.toISOString().split('T')[0];
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 7);
 
-  const handleMoveLeft = async () => {
-    if (selectedTicket) {
-      await updateTicket(selectedTicket.id, {
-        startDate: shiftDate(selectedTicket.startDate, -1),
-        endDate: shiftDate(selectedTicket.endDate, -1),
-      });
-    }
-  };
-
-  const handleMoveRight = async () => {
-    if (selectedTicket) {
-      await updateTicket(selectedTicket.id, {
-        startDate: shiftDate(selectedTicket.startDate, 1),
-        endDate: shiftDate(selectedTicket.endDate, 1),
-      });
-    }
-  };
-
-  const handleExtendLeft = async () => {
-    if (selectedTicket) {
-      await updateTicket(selectedTicket.id, {
-        startDate: shiftDate(selectedTicket.startDate, -1),
-      });
-    }
-  };
-
-  const handleShrinkLeft = async () => {
-    if (selectedTicket) {
-      const newStart = shiftDate(selectedTicket.startDate, 1);
-      if (newStart < selectedTicket.endDate) {
-        await updateTicket(selectedTicket.id, { startDate: newStart });
-      }
-    }
-  };
-
-  const handleShrinkRight = async () => {
-    if (selectedTicket) {
-      const newEnd = shiftDate(selectedTicket.endDate, -1);
-      if (newEnd > selectedTicket.startDate) {
-        await updateTicket(selectedTicket.id, { endDate: newEnd });
-      }
-    }
-  };
-
-  const handleExtendRight = async () => {
-    if (selectedTicket) {
-      await updateTicket(selectedTicket.id, {
-        endDate: shiftDate(selectedTicket.endDate, 1),
-      });
-    }
+    await addTicket({
+      id: linearTicket.identifier,
+      title: linearTicket.title,
+      description: linearTicket.description,
+      startDate,
+      endDate: endDate.toISOString().split('T')[0],
+      linearUrl: linearTicket.url,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      customer: linearTicket.customer,
+    });
   };
 
   const handleDropLinearTicket = async (linearTicket: LinearTicket, startDate: string) => {
@@ -111,6 +120,23 @@ export function App() {
       linearUrl: linearTicket.url,
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
       customer: linearTicket.customer,
+    });
+  };
+
+  const handleAddCustomItem = async (customer: string, title: string) => {
+    const today = new Date();
+    const startDate = today.toISOString().split('T')[0];
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 7);
+
+    await addTicket({
+      id: generateCustomId(),
+      title,
+      startDate,
+      endDate: endDate.toISOString().split('T')[0],
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      customer,
+      isCustom: true,
     });
   };
 
@@ -136,17 +162,20 @@ export function App() {
       selectedTicketUrl={selectedTicket?.linearUrl}
       hasSelection={!!selectedTicket}
       onRemove={canEdit ? handleRemoveSelected : undefined}
-      onMoveLeft={canEdit ? handleMoveLeft : undefined}
-      onMoveRight={canEdit ? handleMoveRight : undefined}
-      onShrinkLeft={canEdit ? handleShrinkLeft : undefined}
-      onExtendLeft={canEdit ? handleExtendLeft : undefined}
-      onShrinkRight={canEdit ? handleShrinkRight : undefined}
-      onExtendRight={canEdit ? handleExtendRight : undefined}
       canEdit={canEdit}
+      dayViewDate={dayViewDate}
+      onDayViewToggle={handleDayViewToggle}
+      onDayViewPrev={handleDayViewPrev}
+      onDayViewNext={handleDayViewNext}
+      customers={customers}
+      customerFilter={customerFilter}
+      onCustomerFilterChange={setCustomerFilter}
       sidebar={
         <TicketList
           tickets={tickets}
           onDelete={canEdit ? removeTicket : undefined}
+          onAdd={canEdit ? handleAddLinearTicket : undefined}
+          onAddCustom={canEdit ? handleAddCustomItem : undefined}
           onSelect={handleSelect}
           selectedId={selectedId}
           canEdit={canEdit}
@@ -154,12 +183,13 @@ export function App() {
       }
       main={
         <GanttChart
-          tickets={tickets}
+          tickets={filteredTickets}
           onUpdate={canEdit ? updateTicket : undefined}
           onDropLinearTicket={canEdit ? handleDropLinearTicket : undefined}
           selectedId={selectedId}
           onSelect={handleSelect}
           canEdit={canEdit}
+          dayViewDate={dayViewDate}
         />
       }
     />
