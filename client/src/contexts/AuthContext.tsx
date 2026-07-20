@@ -18,7 +18,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const STORAGE_KEY = 'gantt-auth-user';
-const DEV_BYPASS_AUTH = import.meta.env.VITE_DEV_BYPASS_AUTH === 'true';
+export const DEV_BYPASS_AUTH = import.meta.env.VITE_DEV_BYPASS_AUTH === 'true';
 
 const DEV_USER: User = {
   email: 'dev@localhost',
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  const canEdit = DEV_BYPASS_AUTH || user?.email === 'matthew@harbourshare.com';
+  const canEdit = DEV_BYPASS_AUTH || (user?.email?.endsWith('@harbourshare.com') ?? false);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, canEdit, signIn, signOut }}>
