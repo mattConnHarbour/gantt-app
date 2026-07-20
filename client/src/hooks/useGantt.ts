@@ -7,10 +7,25 @@ export interface GanttConfig {
   dayWidth: number;
   rowHeight: number;
   headerHeight: number;
+  dayViewDate?: Date;
 }
 
 export function useGantt(tickets: GanttTicket[], config: Partial<GanttConfig> = {}) {
   const fullConfig: GanttConfig = useMemo(() => {
+    // If dayViewDate is provided, show only that single day
+    if (config.dayViewDate) {
+      const dayStart = new Date(config.dayViewDate);
+      dayStart.setHours(0, 0, 0, 0);
+      return {
+        startDate: dayStart,
+        endDate: dayStart,
+        dayWidth: config.dayWidth ?? 60,
+        rowHeight: config.rowHeight ?? 72,
+        headerHeight: config.headerHeight ?? 60,
+        dayViewDate: config.dayViewDate,
+      };
+    }
+
     // Default to showing 2 weeks centered around today
     const today = new Date();
     const defaultStart = new Date(today);
@@ -39,10 +54,10 @@ export function useGantt(tickets: GanttTicket[], config: Partial<GanttConfig> = 
       startDate: start,
       endDate: end,
       dayWidth: config.dayWidth ?? 60,
-      rowHeight: config.rowHeight ?? 50,
+      rowHeight: config.rowHeight ?? 72,
       headerHeight: config.headerHeight ?? 60,
     };
-  }, [tickets, config.startDate, config.endDate, config.dayWidth, config.rowHeight, config.headerHeight]);
+  }, [tickets, config.startDate, config.endDate, config.dayWidth, config.rowHeight, config.headerHeight, config.dayViewDate]);
 
   const days = useMemo(() => {
     const result: Date[] = [];

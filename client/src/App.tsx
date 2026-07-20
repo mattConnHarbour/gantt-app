@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Layout } from './components/Layout';
-import { TicketList } from './components/TicketList';
 import { GanttChart } from './components/GanttChart';
+import { DueDateView } from './components/DueDateView';
 import { SignIn } from './components/SignIn';
 import { useTickets } from './hooks/useTickets';
 import { useAuth } from './contexts/AuthContext';
-import type { GanttTicket, LinearTicket } from './types';
+import type { GanttTicket } from './types';
 import './App.css';
+
+type ViewMode = 'gantt' | 'dueDate';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -21,12 +23,18 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [dayViewDate, setDayViewDate] = useState<Date | null>(null);
   const [customerFilter, setCustomerFilter] = useState<string>('');
+  const [viewMode, setViewMode] = useState<ViewMode>('gantt');
 
   // Extract unique customers from tickets
   const customers = [...new Set(tickets.map(t => t.customer).filter(Boolean))] as string[];
 
   const handleDayViewToggle = () => {
-    setDayViewDate(dayViewDate ? null : new Date());
+    if (dayViewDate) {
+      setDayViewDate(null);
+    } else {
+      setDayViewDate(new Date());
+      setViewMode('gantt'); // Exit due date view when entering day view
+    }
   };
 
   const handleDayViewPrev = () => {
@@ -42,6 +50,15 @@ export function App() {
       const next = new Date(dayViewDate);
       next.setDate(next.getDate() + 1);
       setDayViewDate(next);
+    }
+  };
+
+  const handleDueDateToggle = () => {
+    if (viewMode === 'dueDate') {
+      setViewMode('gantt');
+    } else {
+      setViewMode('dueDate');
+      setDayViewDate(null); // Exit day view when entering due date view
     }
   };
 
@@ -87,40 +104,6 @@ export function App() {
       await removeTicket(selectedId);
       setSelectedId(undefined);
     }
-  };
-
-  const handleAddLinearTicket = async (linearTicket: LinearTicket) => {
-    const today = new Date();
-    const startDate = today.toISOString().split('T')[0];
-    const endDate = new Date(today);
-    endDate.setDate(endDate.getDate() + 7);
-
-    await addTicket({
-      id: linearTicket.identifier,
-      title: linearTicket.title,
-      description: linearTicket.description,
-      startDate,
-      endDate: endDate.toISOString().split('T')[0],
-      linearUrl: linearTicket.url,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      customer: linearTicket.customer,
-    });
-  };
-
-  const handleDropLinearTicket = async (linearTicket: LinearTicket, startDate: string) => {
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 7);
-
-    await addTicket({
-      id: linearTicket.identifier,
-      title: linearTicket.title,
-      description: linearTicket.description,
-      startDate,
-      endDate: endDate.toISOString().split('T')[0],
-      linearUrl: linearTicket.url,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      customer: linearTicket.customer,
-    });
   };
 
   const handleAddCustomItem = async (customer: string, title: string) => {
@@ -170,27 +153,26 @@ export function App() {
       customers={customers}
       customerFilter={customerFilter}
       onCustomerFilterChange={setCustomerFilter}
-      sidebar={
-        <TicketList
-          tickets={tickets}
-          onDelete={canEdit ? removeTicket : undefined}
-          onAdd={canEdit ? handleAddLinearTicket : undefined}
-          onAddCustom={canEdit ? handleAddCustomItem : undefined}
-          onSelect={handleSelect}
-          selectedId={selectedId}
-          canEdit={canEdit}
-        />
-      }
+      onAddCustom={canEdit ? handleAddCustomItem : undefined}
+      viewMode={viewMode}
+      onDueDateToggle={handleDueDateToggle}
       main={
-        <GanttChart
-          tickets={filteredTickets}
-          onUpdate={canEdit ? updateTicket : undefined}
-          onDropLinearTicket={canEdit ? handleDropLinearTicket : undefined}
-          selectedId={selectedId}
-          onSelect={handleSelect}
-          canEdit={canEdit}
-          dayViewDate={dayViewDate}
-        />
+        viewMode === 'dueDate' ? (
+          <DueDateView
+            tickets={filteredTickets}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+          />
+        ) : (
+          <GanttChart
+            tickets={filteredTickets}
+            onUpdate={canEdit ? updateTicket : undefined}
+            selectedId={selectedId}
+            onSelect={handleSelect}
+            canEdit={canEdit}
+            dayViewDate={dayViewDate}
+          />
+        )
       }
     />
   );

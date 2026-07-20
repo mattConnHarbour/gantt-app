@@ -18,21 +18,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const STORAGE_KEY = 'gantt-auth-user';
-export const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
+const DEV_BYPASS_AUTH = import.meta.env.VITE_DEV_BYPASS_AUTH === 'true';
 
 const DEV_USER: User = {
-  email: 'matthew@harbourshare.com',
+  email: 'dev@localhost',
   name: 'Dev User',
-  picture: '',
+  picture: 'https://ui-avatars.com/api/?name=Dev+User&background=3b82f6&color=fff',
   token: 'dev-token',
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(DEV_MODE ? DEV_USER : null);
-  const [isLoading, setIsLoading] = useState(!DEV_MODE);
+  const [user, setUser] = useState<User | null>(DEV_BYPASS_AUTH ? DEV_USER : null);
+  const [isLoading, setIsLoading] = useState(!DEV_BYPASS_AUTH);
 
   useEffect(() => {
-    if (DEV_MODE) return;
+    if (DEV_BYPASS_AUTH) return;
 
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  const canEdit = user?.email === 'matthew@harbourshare.com';
+  const canEdit = DEV_BYPASS_AUTH || user?.email === 'matthew@harbourshare.com';
 
   return (
     <AuthContext.Provider value={{ user, isLoading, canEdit, signIn, signOut }}>

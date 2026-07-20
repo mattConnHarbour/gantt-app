@@ -1,100 +1,80 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
-  sidebar: React.ReactNode;
   main: React.ReactNode;
   selectedTicketUrl?: string;
   hasSelection?: boolean;
   onRemove?: () => void;
-  onMoveLeft?: () => void;
-  onMoveRight?: () => void;
-  onShrinkLeft?: () => void;
-  onExtendLeft?: () => void;
-  onShrinkRight?: () => void;
-  onExtendRight?: () => void;
   canEdit?: boolean;
+  dayViewDate?: Date | null;
+  onDayViewToggle?: () => void;
+  onDayViewPrev?: () => void;
+  onDayViewNext?: () => void;
+  customers?: string[];
+  customerFilter?: string;
+  onCustomerFilterChange?: (customer: string) => void;
+  onAddCustom?: (customer: string, title: string) => Promise<void>;
+  viewMode?: 'gantt' | 'dueDate';
+  onDueDateToggle?: () => void;
 }
 
 export function Layout({
-  sidebar,
   main,
   selectedTicketUrl,
   hasSelection,
   onRemove,
-  onMoveLeft,
-  onMoveRight,
-  onShrinkLeft,
-  onExtendLeft,
-  onShrinkRight,
-  onExtendRight,
-  canEdit
+  canEdit,
+  dayViewDate,
+  onDayViewToggle,
+  onDayViewPrev,
+  onDayViewNext,
+  customers = [],
+  customerFilter = '',
+  onCustomerFilterChange,
+  onAddCustom,
+  viewMode = 'gantt',
+  onDueDateToggle
 }: Props) {
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
+  const [customCustomer, setCustomCustomer] = useState('');
+  const [customTitle, setCustomTitle] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { user, signOut } = useAuth();
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowAddDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleAddCustom = async () => {
+    if (!customCustomer.trim() || !customTitle.trim() || !onAddCustom) return;
+    setIsAdding(true);
+    try {
+      await onAddCustom(customCustomer.trim(), customTitle.trim());
+      setCustomCustomer('');
+      setCustomTitle('');
+      setShowAddDropdown(false);
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const dayLabel = dayViewDate
+    ? dayViewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    : 'Day View';
 
   return (
     <div className="layout">
       <header className="header">
-        <button className="menu-toggle" onClick={() => setShowSidebar(!showSidebar)}>
-          {showSidebar ? '←' : '☰'}
-        </button>
         <h1>Gantt Chart</h1>
         <div className="header-actions">
-          {canEdit && (
-            <>
-              <button
-                className="header-btn"
-                disabled={!hasSelection}
-                onClick={onMoveLeft}
-                title="Move left"
-              >
-                ◀
-              </button>
-              <button
-                className="header-btn"
-                disabled={!hasSelection}
-                onClick={onMoveRight}
-                title="Move right"
-              >
-                ▶
-              </button>
-              <span className="header-separator" />
-              <button
-                className="header-btn"
-                disabled={!hasSelection}
-                onClick={onExtendLeft}
-                title="Extend left (start earlier)"
-              >
-                ⇤
-              </button>
-              <button
-                className="header-btn"
-                disabled={!hasSelection}
-                onClick={onShrinkLeft}
-                title="Shrink left (start later)"
-              >
-                ⇥
-              </button>
-              <span className="header-separator" />
-              <button
-                className="header-btn"
-                disabled={!hasSelection}
-                onClick={onShrinkRight}
-                title="Shrink right (end earlier)"
-              >
-                ⇤
-              </button>
-              <button
-                className="header-btn"
-                disabled={!hasSelection}
-                onClick={onExtendRight}
-                title="Extend right (end later)"
-              >
-                ⇥
-              </button>
-            </>
-          )}
           <button
             className="header-btn"
             disabled={!hasSelection || !selectedTicketUrl}
@@ -112,6 +92,82 @@ export function Layout({
               Remove
             </button>
           )}
+          <div className="header-separator" />
+          {customers.length > 0 && (
+            <select
+              className="customer-filter"
+              value={customerFilter}
+              onChange={(e) => onCustomerFilterChange?.(e.target.value)}
+            >
+              <option value="">All Customers</option>
+              {customers.map((customer) => (
+                <option key={customer} value={customer}>
+                  {customer}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="day-view-controls">
+            {dayViewDate && (
+              <button className="day-nav-btn" onClick={onDayViewPrev}>
+                &lt;
+              </button>
+            )}
+            <button
+              className={`day-view-btn ${dayViewDate ? 'active' : ''}`}
+              onClick={onDayViewToggle}
+            >
+              {dayLabel}
+            </button>
+            {dayViewDate && (
+              <button className="day-nav-btn" onClick={onDayViewNext}>
+                &gt;
+              </button>
+            )}
+          </div>
+          <button
+            className={`header-btn due-date-btn ${viewMode === 'dueDate' ? 'active' : ''}`}
+            onClick={onDueDateToggle}
+          >
+            Due Dates
+          </button>
+          {canEdit && onAddCustom && (
+            <div className="add-item-dropdown" ref={dropdownRef}>
+              <button
+                className="header-btn add-item-btn"
+                onClick={() => setShowAddDropdown(!showAddDropdown)}
+              >
+                + Add Item
+              </button>
+              {showAddDropdown && (
+                <div className="add-item-menu">
+                  <input
+                    type="text"
+                    className="add-item-input"
+                    placeholder="Customer"
+                    value={customCustomer}
+                    onChange={(e) => setCustomCustomer(e.target.value)}
+                    autoFocus
+                  />
+                  <input
+                    type="text"
+                    className="add-item-input"
+                    placeholder="Title"
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+                  />
+                  <button
+                    className="add-item-submit"
+                    onClick={handleAddCustom}
+                    disabled={isAdding || !customCustomer.trim() || !customTitle.trim()}
+                  >
+                    {isAdding ? 'Adding...' : 'Add'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="header-user">
           {user && (
@@ -123,7 +179,6 @@ export function Layout({
         </div>
       </header>
       <div className="layout-body">
-        <aside className={`sidebar ${showSidebar ? 'open' : ''}`}>{sidebar}</aside>
         <main className="main">{main}</main>
       </div>
     </div>
