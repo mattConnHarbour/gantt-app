@@ -36,9 +36,27 @@ export function QuestTree({ tickets, selectedId, onSelect, onUpdate, canEdit }: 
       const date = ticket.startDate.split('T')[0];
       grouped.set(date, [...(grouped.get(date) || []), ticket]);
     }
-    return Array.from(grouped.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, dayTickets]): QuestDay => ({ date, tickets: dayTickets }));
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const twoWeeksAhead = new Date(today);
+    twoWeeksAhead.setUTCDate(twoWeeksAhead.getUTCDate() + 14);
+
+    const ticketDates = tickets.flatMap(ticket => [
+      new Date(`${ticket.startDate.split('T')[0]}T00:00:00Z`),
+      new Date(`${ticket.endDate.split('T')[0]}T00:00:00Z`),
+    ]).filter(date => !Number.isNaN(date.getTime()));
+
+    const start = new Date(Math.min(today.getTime(), ...ticketDates.map(date => date.getTime())));
+    const end = new Date(Math.max(twoWeeksAhead.getTime(), ...ticketDates.map(date => date.getTime())));
+    const continuousDays: QuestDay[] = [];
+
+    for (const date = new Date(start); date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+      const key = date.toISOString().split('T')[0];
+      continuousDays.push({ date: key, tickets: grouped.get(key) || [] });
+    }
+
+    return continuousDays;
   }, [tickets]);
 
   const moveTicket = async (targetDate: string) => {
@@ -81,7 +99,7 @@ export function QuestTree({ tickets, selectedId, onSelect, onUpdate, canEdit }: 
           <section className="quest-stage" key={day.date}>
             <div className="quest-path-line" />
             <div
-              className={`quest-date-node ${dropDate === day.date ? 'drop-target' : ''}`}
+              className={`quest-date-node ${day.tickets.length === 0 ? 'empty' : ''} ${dropDate === day.date ? 'drop-target' : ''}`}
               onDragOver={(event) => {
                 if (!canEdit || !draggedId) return;
                 event.preventDefault();
@@ -101,8 +119,6 @@ export function QuestTree({ tickets, selectedId, onSelect, onUpdate, canEdit }: 
             <div className="quest-branches">
               {day.tickets.map((ticket, index) => {
                 const offset = (index - (day.tickets.length - 1) / 2) * 220;
-                const branchWidth = Math.sqrt(70 ** 2 + offset ** 2);
-                const branchAngle = Math.atan2(offset, 70) * (180 / Math.PI);
                 return (
                   <button
                     key={ticket.id}
@@ -121,10 +137,6 @@ export function QuestTree({ tickets, selectedId, onSelect, onUpdate, canEdit }: 
                       setDropDate(null);
                     }}
                   >
-                    <span
-                      className="quest-branch-line"
-                      style={{ width: branchWidth, transform: `rotate(${branchAngle}deg)` }}
-                    />
                     <DragonIcon className={`quest-item-dragon ${draggedId === ticket.id ? 'dragging' : ''}`} color={ticket.color || '#3b82f6'} />
                     <span className="quest-item-copy">
                       <strong>{ticket.title}</strong>

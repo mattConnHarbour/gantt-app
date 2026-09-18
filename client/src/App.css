@@ -193,6 +193,23 @@ body {
 .quest-date-node strong { font-size: 17px; }
 .quest-date-node span { color: #c4b5fd; font-size: 11px; text-transform: uppercase; }
 
+.quest-date-node.empty {
+  background: #172033;
+  border-color: #64748b;
+  color: #cbd5e1;
+}
+
+.quest-date-node.empty::after {
+  content: 'Empty';
+  position: absolute;
+  top: calc(100% + 7px);
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
 .quest-date-node.drop-target {
   color: #fff;
   background: #4c1d95;
@@ -228,15 +245,6 @@ body {
 
 .quest-item:hover { transform: translateY(-50%) scale(1.04); }
 .quest-item.selected { filter: drop-shadow(0 0 8px #fbbf24); }
-
-.quest-branch-line {
-  position: absolute;
-  z-index: -1;
-  right: 100%;
-  top: 50%;
-  border-top: 2px solid #64748b;
-  transform-origin: right center;
-}
 
 .quest-item-dragon { width: 180px; height: 158px; flex: 0 0 180px; }
 .quest-item-dragon.dragging { opacity: .45; filter: grayscale(.5); }
