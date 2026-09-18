@@ -58,7 +58,7 @@ export function QuestTree({ tickets, selectedId, onSelect }: Props) {
 
             <div className="quest-branches">
               {day.tickets.map((ticket, index) => {
-                const offset = (index - (day.tickets.length - 1) / 2) * 170;
+                const offset = (index - (day.tickets.length - 1) / 2) * 220;
                 const branchWidth = Math.sqrt(70 ** 2 + offset ** 2);
                 const branchAngle = Math.atan2(offset, 70) * (180 / Math.PI);
                 return (
