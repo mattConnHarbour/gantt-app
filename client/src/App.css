@@ -193,6 +193,14 @@ body {
 .quest-date-node strong { font-size: 17px; }
 .quest-date-node span { color: #c4b5fd; font-size: 11px; text-transform: uppercase; }
 
+.quest-date-node.drop-target {
+  color: #fff;
+  background: #4c1d95;
+  border-color: #fde047;
+  transform: translateY(-50%) scale(1.12);
+  box-shadow: 0 0 0 6px #0f172a, 0 0 24px rgb(253 224 71 / 75%);
+}
+
 .quest-branches {
   position: absolute;
   inset: 0;
@@ -231,6 +239,7 @@ body {
 }
 
 .quest-item-dragon { width: 180px; height: 158px; flex: 0 0 180px; }
+.quest-item-dragon.dragging { opacity: .45; filter: grayscale(.5); }
 .quest-item-copy {
   position: absolute;
   z-index: 3;

@@ -174,6 +174,8 @@ export function App() {
             tickets={filteredTickets}
             selectedId={selectedId}
             onSelect={handleSelect}
+            onUpdate={canEdit ? updateTicket : undefined}
+            canEdit={canEdit}
           />
         ) : viewMode === 'dueDate' ? (
           <DueDateView
