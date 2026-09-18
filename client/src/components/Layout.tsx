@@ -17,6 +17,8 @@ interface Props {
   onAddCustom?: (customer: string, title: string) => Promise<void>;
   viewMode?: 'gantt' | 'dueDate';
   onDueDateToggle?: () => void;
+  questMode?: boolean;
+  onQuestModeToggle?: () => void;
 }
 
 export function Layout({
@@ -34,7 +36,9 @@ export function Layout({
   onCustomerFilterChange,
   onAddCustom,
   viewMode = 'gantt',
-  onDueDateToggle
+  onDueDateToggle,
+  questMode = false,
+  onQuestModeToggle
 }: Props) {
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [customCustomer, setCustomCustomer] = useState('');
@@ -130,6 +134,14 @@ export function Layout({
             onClick={onDueDateToggle}
           >
             Due Dates
+          </button>
+          <button
+            className={`header-btn quest-mode-btn ${questMode ? 'active' : ''}`}
+            onClick={onQuestModeToggle}
+            aria-pressed={questMode}
+            title="Turn the timeline into a quest"
+          >
+            <span aria-hidden="true">⚔️</span> Quest Mode
           </button>
           {canEdit && onAddCustom && (
             <div className="add-item-dropdown" ref={dropdownRef}>
