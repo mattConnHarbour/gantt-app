@@ -84,13 +84,6 @@ body {
   border-color: var(--error);
 }
 
-.quest-mode-btn.active {
-  color: #fff7d6;
-  background: linear-gradient(135deg, #7c3aed, #be123c);
-  border-color: #fbbf24;
-  box-shadow: 0 0 0 1px rgb(251 191 36 / 25%), 0 0 16px rgb(124 58 237 / 35%);
-}
-
 /* Quest tree */
 .quest-tree-scroll {
   width: 100%;

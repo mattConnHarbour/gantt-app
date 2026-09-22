@@ -25,15 +25,7 @@ export function App() {
   const [dayViewDate, setDayViewDate] = useState<Date | null>(null);
   const [customerFilter, setCustomerFilter] = useState<string>('');
   const [viewMode, setViewMode] = useState<ViewMode>('gantt');
-  const [questMode, setQuestMode] = useState(() => localStorage.getItem('questMode') === 'true');
-
-  const handleQuestModeToggle = () => {
-    setQuestMode(current => {
-      const next = !current;
-      localStorage.setItem('questMode', String(next));
-      return next;
-    });
-  };
+  const [questMode] = useState(() => localStorage.getItem('questMode') === 'true');
 
   // Extract unique customers from tickets
   const customers = [...new Set(tickets.map(t => t.customer).filter(Boolean))] as string[];
@@ -166,8 +158,6 @@ export function App() {
       onAddCustom={canEdit ? handleAddCustomItem : undefined}
       viewMode={viewMode}
       onDueDateToggle={handleDueDateToggle}
-      questMode={questMode}
-      onQuestModeToggle={handleQuestModeToggle}
       main={
         questMode ? (
           <QuestTree
