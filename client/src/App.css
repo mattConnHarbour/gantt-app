@@ -271,6 +271,13 @@ body {
   overflow: visible;
   white-space: normal;
   font-size: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.quest-item-copy time {
+  color: #fbbf24;
+  white-space: nowrap;
 }
 
 .quest-empty {

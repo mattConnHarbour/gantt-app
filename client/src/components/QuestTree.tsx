@@ -27,6 +27,15 @@ function dateLabel(value: string) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function formatQuestDueDate(value: string) {
+  const date = new Date(`${value.split('T')[0]}T12:00:00`);
+  return date.toLocaleDateString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: '2-digit',
+  });
+}
+
 export function QuestTree({ tickets, selectedId, onSelect, onUpdate, canEdit }: Props) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropDate, setDropDate] = useState<string | null>(null);
@@ -140,7 +149,10 @@ export function QuestTree({ tickets, selectedId, onSelect, onUpdate, canEdit }: 
                     <DragonIcon className={`quest-item-dragon ${draggedId === ticket.id ? 'dragging' : ''}`} color={ticket.color || '#3b82f6'} />
                     <span className="quest-item-copy">
                       <strong>{ticket.title}</strong>
-                      <small>{ticket.customer || ticket.id}</small>
+                      <small>
+                        <span>{ticket.customer || ticket.id}</span>
+                        <time dateTime={ticket.endDate}>{formatQuestDueDate(ticket.endDate)}</time>
+                      </small>
                     </span>
                   </button>
                 );
