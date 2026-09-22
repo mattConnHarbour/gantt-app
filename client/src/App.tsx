@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Layout } from './components/Layout';
 import { GanttChart } from './components/GanttChart';
 import { DueDateView } from './components/DueDateView';
-import { QuestTree } from './components/QuestTree';
 import { SignIn } from './components/SignIn';
 import { useTickets } from './hooks/useTickets';
 import { useAuth } from './contexts/AuthContext';
@@ -25,7 +24,6 @@ export function App() {
   const [dayViewDate, setDayViewDate] = useState<Date | null>(null);
   const [customerFilter, setCustomerFilter] = useState<string>('');
   const [viewMode, setViewMode] = useState<ViewMode>('gantt');
-  const [questMode] = useState(() => localStorage.getItem('questMode') === 'true');
 
   // Extract unique customers from tickets
   const customers = [...new Set(tickets.map(t => t.customer).filter(Boolean))] as string[];
@@ -159,15 +157,7 @@ export function App() {
       viewMode={viewMode}
       onDueDateToggle={handleDueDateToggle}
       main={
-        questMode ? (
-          <QuestTree
-            tickets={filteredTickets}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            onUpdate={canEdit ? updateTicket : undefined}
-            canEdit={canEdit}
-          />
-        ) : viewMode === 'dueDate' ? (
+        viewMode === 'dueDate' ? (
           <DueDateView
             tickets={filteredTickets}
             selectedId={selectedId}
