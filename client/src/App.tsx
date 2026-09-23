@@ -24,6 +24,7 @@ export function App() {
   const [dayViewDate, setDayViewDate] = useState<Date | null>(null);
   const [customerFilter, setCustomerFilter] = useState<string>('');
   const [viewMode, setViewMode] = useState<ViewMode>('gantt');
+  const [sortByDueDate, setSortByDueDate] = useState(false);
 
   // Extract unique customers from tickets
   const customers = [...new Set(tickets.map(t => t.customer).filter(Boolean))] as string[];
@@ -50,15 +51,6 @@ export function App() {
       const next = new Date(dayViewDate);
       next.setDate(next.getDate() + 1);
       setDayViewDate(next);
-    }
-  };
-
-  const handleDueDateToggle = () => {
-    if (viewMode === 'dueDate') {
-      setViewMode('gantt');
-    } else {
-      setViewMode('dueDate');
-      setDayViewDate(null); // Exit day view when entering due date view
     }
   };
 
@@ -155,7 +147,8 @@ export function App() {
       onCustomerFilterChange={setCustomerFilter}
       onAddCustom={canEdit ? handleAddCustomItem : undefined}
       viewMode={viewMode}
-      onDueDateToggle={handleDueDateToggle}
+      sortByDueDate={sortByDueDate}
+      onSortByDueDateToggle={() => setSortByDueDate((current) => !current)}
       main={
         viewMode === 'dueDate' ? (
           <DueDateView
@@ -171,6 +164,7 @@ export function App() {
             onSelect={handleSelect}
             canEdit={canEdit}
             dayViewDate={dayViewDate}
+            sortByDueDate={sortByDueDate}
           />
         )
       }

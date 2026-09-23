@@ -16,7 +16,8 @@ interface Props {
   onCustomerFilterChange?: (customer: string) => void;
   onAddCustom?: (customer: string, title: string) => Promise<void>;
   viewMode?: 'gantt' | 'dueDate';
-  onDueDateToggle?: () => void;
+  sortByDueDate?: boolean;
+  onSortByDueDateToggle?: () => void;
 }
 
 export function Layout({
@@ -26,7 +27,8 @@ export function Layout({
   canEdit,
   onAddCustom,
   viewMode = 'gantt',
-  onDueDateToggle
+  sortByDueDate = false,
+  onSortByDueDateToggle,
 }: Props) {
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [customCustomer, setCustomCustomer] = useState('');
@@ -73,12 +75,15 @@ export function Layout({
             </button>
           )}
           <div className="header-separator" />
-          <button
-            className={`header-btn due-date-btn ${viewMode === 'dueDate' ? 'active' : ''}`}
-            onClick={onDueDateToggle}
-          >
-            Due Dates
-          </button>
+          {viewMode === 'gantt' && (
+            <button
+              className={`header-btn due-date-btn ${sortByDueDate ? 'active' : ''}`}
+              onClick={onSortByDueDateToggle}
+              aria-pressed={sortByDueDate}
+            >
+              Sort
+            </button>
+          )}
           {canEdit && onAddCustom && (
             <div className="add-item-dropdown" ref={dropdownRef}>
               <button

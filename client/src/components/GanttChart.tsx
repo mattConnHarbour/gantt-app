@@ -3,6 +3,7 @@ import type { GanttTicket } from '../types';
 import { parseCalendarDate, useGantt } from '../hooks/useGantt';
 
 interface CustomerGroup {
+  key: string;
   customer: string;
   tickets: GanttTicket[];
 }
@@ -14,6 +15,7 @@ interface Props {
   onSelect?: (ticket: GanttTicket) => void;
   canEdit?: boolean;
   dayViewDate?: Date | null;
+  sortByDueDate?: boolean;
 }
 
 interface DragState {
@@ -49,7 +51,7 @@ const formatDueDate = (date: string) => {
 
 const GROUP_HEADER_HEIGHT = 32;
 
-export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, dayViewDate }: Props) {
+export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, dayViewDate, sortByDueDate = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -58,6 +60,20 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
 
   // Group tickets by customer
   const customerGroups = useMemo((): CustomerGroup[] => {
+    if (sortByDueDate) {
+      return [...tickets]
+        .sort((a, b) =>
+          a.endDate.localeCompare(b.endDate) ||
+          a.startDate.localeCompare(b.startDate) ||
+          a.title.localeCompare(b.title)
+        )
+        .map((ticket) => ({
+          key: ticket.id,
+          customer: ticket.customer || 'Unassigned',
+          tickets: [ticket],
+        }));
+    }
+
     const groupMap = new Map<string, GanttTicket[]>();
 
     for (const ticket of tickets) {
@@ -75,8 +91,8 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
         if (b === 'Unassigned') return -1;
         return a.localeCompare(b);
       })
-      .map(([customer, groupTickets]) => ({ customer, tickets: groupTickets }));
-  }, [tickets]);
+      .map(([customer, groupTickets]) => ({ key: customer, customer, tickets: groupTickets }));
+  }, [tickets, sortByDueDate]);
 
   // Calculate total height with group headers
   const totalHeight = useMemo(() => {
@@ -337,7 +353,7 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
                 currentY += GROUP_HEADER_HEIGHT;
 
                 const groupElements = (
-                  <div key={group.customer} className="gantt-customer-group">
+                  <div key={group.key} className="gantt-customer-group">
                     {/* Customer group header */}
                     <div
                       className="gantt-group-header"
