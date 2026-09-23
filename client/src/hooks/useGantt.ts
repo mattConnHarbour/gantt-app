@@ -10,12 +10,33 @@ export interface GanttConfig {
   dayViewDate?: Date;
 }
 
+const startOfLocalDay = (date: Date): Date => {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+// Date-only strings represent calendar dates. Parsing them with `new Date()`
+// treats them as UTC, which shifts their position against the local-time grid.
+export const parseCalendarDate = (date: Date | string): Date => {
+  if (typeof date !== 'string') return startOfLocalDay(date);
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
+  return startOfLocalDay(new Date(date));
+};
+
+const calendarDayNumber = (date: Date): number =>
+  Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
+
 export function useGantt(tickets: GanttTicket[], config: Partial<GanttConfig> = {}) {
   const fullConfig: GanttConfig = useMemo(() => {
     // If dayViewDate is provided, show only that single day
     if (config.dayViewDate) {
-      const dayStart = new Date(config.dayViewDate);
-      dayStart.setHours(0, 0, 0, 0);
+      const dayStart = startOfLocalDay(config.dayViewDate);
       return {
         startDate: dayStart,
         endDate: dayStart,
@@ -27,19 +48,19 @@ export function useGantt(tickets: GanttTicket[], config: Partial<GanttConfig> = 
     }
 
     // Default to showing 2 weeks centered around today
-    const today = new Date();
+    const today = startOfLocalDay(new Date());
     const defaultStart = new Date(today);
     defaultStart.setDate(defaultStart.getDate() - 3);
     const defaultEnd = new Date(today);
     defaultEnd.setDate(defaultEnd.getDate() + 11);
 
     // If we have tickets, expand the range to include them
-    let start = config.startDate ?? defaultStart;
-    let end = config.endDate ?? defaultEnd;
+    let start = config.startDate ? startOfLocalDay(config.startDate) : defaultStart;
+    let end = config.endDate ? startOfLocalDay(config.endDate) : defaultEnd;
 
     for (const ticket of tickets) {
-      const ticketStart = new Date(ticket.startDate);
-      const ticketEnd = new Date(ticket.endDate);
+      const ticketStart = parseCalendarDate(ticket.startDate);
+      const ticketEnd = parseCalendarDate(ticket.endDate);
       if (ticketStart < start) start = ticketStart;
       if (ticketEnd > end) end = ticketEnd;
     }
@@ -73,9 +94,8 @@ export function useGantt(tickets: GanttTicket[], config: Partial<GanttConfig> = 
   const totalHeight = fullConfig.headerHeight + tickets.length * fullConfig.rowHeight;
 
   const getDatePosition = (date: Date | string): number => {
-    const d = typeof date === 'string' ? new Date(date) : date;
-    const diff = d.getTime() - fullConfig.startDate.getTime();
-    const daysDiff = diff / (1000 * 60 * 60 * 24);
+    const d = parseCalendarDate(date);
+    const daysDiff = calendarDayNumber(d) - calendarDayNumber(fullConfig.startDate);
     return daysDiff * fullConfig.dayWidth;
   };
 

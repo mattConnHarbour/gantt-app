@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import type { GanttTicket } from '../types';
-import { useGantt } from '../hooks/useGantt';
+import { parseCalendarDate, useGantt } from '../hooks/useGantt';
 
 interface CustomerGroup {
   customer: string;
@@ -32,10 +32,14 @@ interface PendingDateChange {
   newEndDate: string;
 }
 
-const formatDate = (d: Date) => d.toISOString().split('T')[0];
-const formatRightEdgeDueDate = (date: string) => {
-  const dueDate = new Date(`${date}T12:00:00`);
-  dueDate.setDate(dueDate.getDate() - 1);
+const formatDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const formatDueDate = (date: string) => {
+  const dueDate = parseCalendarDate(date);
   return dueDate.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -112,8 +116,8 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
 
       if (deltaDays === 0) return;
 
-      const initialStart = new Date(dragState.initialStartDate);
-      const initialEnd = new Date(dragState.initialEndDate);
+      const initialStart = parseCalendarDate(dragState.initialStartDate);
+      const initialEnd = parseCalendarDate(dragState.initialEndDate);
 
       let newStartDate = formatDate(initialStart);
       let newEndDate = formatDate(initialEnd);
@@ -166,8 +170,8 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
       const deltaX = e.clientX - dragState.startX;
       const deltaDays = Math.round(deltaX / config.dayWidth);
 
-      const initialStart = new Date(dragState.initialStartDate);
-      const initialEnd = new Date(dragState.initialEndDate);
+      const initialStart = parseCalendarDate(dragState.initialStartDate);
+      const initialEnd = parseCalendarDate(dragState.initialEndDate);
 
       let newStartDate = formatDate(initialStart);
       let newEndDate = formatDate(initialEnd);
@@ -423,7 +427,7 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
             </h2>
             <div className="date-change-lines">
               <p>
-                Due EOD {formatRightEdgeDueDate(pendingDateChange.oldEndDate)} to due EOD {formatRightEdgeDueDate(pendingDateChange.newEndDate)}
+                Due EOD {formatDueDate(pendingDateChange.oldEndDate)} to due EOD {formatDueDate(pendingDateChange.newEndDate)}
               </p>
             </div>
             <div className="date-change-actions">

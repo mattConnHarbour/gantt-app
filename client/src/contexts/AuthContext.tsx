@@ -18,7 +18,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const STORAGE_KEY = 'gantt-auth-user';
-export const DEV_BYPASS_AUTH = import.meta.env.VITE_DEV_BYPASS_AUTH === 'true';
+// Vite only sets DEV for the local development server. Production builds keep
+// the normal Google sign-in flow even when they are served from localhost.
+export const DEV_BYPASS_AUTH = import.meta.env.DEV;
 
 const DEV_USER: User = {
   email: 'dev@localhost',
