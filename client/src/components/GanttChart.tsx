@@ -365,7 +365,7 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
                             left,
                             top,
                             width,
-                            backgroundColor: '#0c66e4',
+                            backgroundColor: '#7a869a',
                           }}
                           onClick={() => onSelect?.(ticket)}
                         >

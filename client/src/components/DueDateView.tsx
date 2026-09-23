@@ -65,7 +65,7 @@ export function DueDateView({ tickets, selectedId, onSelect }: Props) {
             >
               <div
                 className="due-date-ticket-box"
-                style={{ backgroundColor: '#0c66e4' }}
+                style={{ backgroundColor: '#7a869a' }}
               >
                 <span className="due-date-ticket-title">{ticket.title}</span>
               </div>
