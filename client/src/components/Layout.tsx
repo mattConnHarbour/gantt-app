@@ -21,17 +21,9 @@ interface Props {
 
 export function Layout({
   main,
-  selectedTicketUrl,
   hasSelection,
   onRemove,
   canEdit,
-  dayViewDate,
-  onDayViewToggle,
-  onDayViewPrev,
-  onDayViewNext,
-  customers = [],
-  customerFilter = '',
-  onCustomerFilterChange,
   onAddCustom,
   viewMode = 'gantt',
   onDueDateToggle
@@ -66,23 +58,11 @@ export function Layout({
     }
   };
 
-  const dayLabel = dayViewDate
-    ? dayViewDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-    : 'Day View';
-
   return (
     <div className="layout">
       <header className="header">
-        <h1>Gantt Chart</h1>
+        <h1>In-flight Planner</h1>
         <div className="header-actions">
-          <button
-            className="header-btn"
-            disabled={!hasSelection || !selectedTicketUrl}
-            onClick={() => selectedTicketUrl && window.open(selectedTicketUrl, '_blank')}
-            title={!selectedTicketUrl && hasSelection ? 'No Linear link' : 'Open in Linear'}
-          >
-            Open
-          </button>
           {canEdit && (
             <button
               className="header-btn header-btn-danger"
@@ -93,38 +73,6 @@ export function Layout({
             </button>
           )}
           <div className="header-separator" />
-          {customers.length > 0 && (
-            <select
-              className="customer-filter"
-              value={customerFilter}
-              onChange={(e) => onCustomerFilterChange?.(e.target.value)}
-            >
-              <option value="">All Customers</option>
-              {customers.map((customer) => (
-                <option key={customer} value={customer}>
-                  {customer}
-                </option>
-              ))}
-            </select>
-          )}
-          <div className="day-view-controls">
-            {dayViewDate && (
-              <button className="day-nav-btn" onClick={onDayViewPrev}>
-                &lt;
-              </button>
-            )}
-            <button
-              className={`day-view-btn ${dayViewDate ? 'active' : ''}`}
-              onClick={onDayViewToggle}
-            >
-              {dayLabel}
-            </button>
-            {dayViewDate && (
-              <button className="day-nav-btn" onClick={onDayViewNext}>
-                &gt;
-              </button>
-            )}
-          </div>
           <button
             className={`header-btn due-date-btn ${viewMode === 'dueDate' ? 'active' : ''}`}
             onClick={onDueDateToggle}

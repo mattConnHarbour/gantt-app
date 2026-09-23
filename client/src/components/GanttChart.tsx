@@ -1,5 +1,5 @@
-import { useRef, useState, useCallback, useMemo } from 'react';
-import type { GanttTicket, LinearTicket } from '../types';
+import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import type { GanttTicket } from '../types';
 import { useGantt } from '../hooks/useGantt';
 
 interface CustomerGroup {
@@ -10,7 +10,6 @@ interface CustomerGroup {
 interface Props {
   tickets: GanttTicket[];
   onUpdate?: (id: string, updates: { startDate?: string; endDate?: string; notes?: string }) => Promise<unknown>;
-  onDropLinearTicket?: (ticket: LinearTicket, startDate: string) => Promise<void>;
   selectedId?: string;
   onSelect?: (ticket: GanttTicket) => void;
   canEdit?: boolean;
@@ -25,16 +24,33 @@ interface DragState {
   initialEndDate: string;
 }
 
+interface PendingDateChange {
+  ticket: GanttTicket;
+  oldStartDate: string;
+  oldEndDate: string;
+  newStartDate: string;
+  newEndDate: string;
+}
+
 const formatDate = (d: Date) => d.toISOString().split('T')[0];
+const formatRightEdgeDueDate = (date: string) => {
+  const dueDate = new Date(`${date}T12:00:00`);
+  dueDate.setDate(dueDate.getDate() - 1);
+  return dueDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
 
 const GROUP_HEADER_HEIGHT = 32;
 
-export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, onSelect, canEdit, dayViewDate }: Props) {
+export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, dayViewDate }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
-  const [dropHighlight, setDropHighlight] = useState(false);
-  const { config, days, totalWidth, getDatePosition, getPositionDate } = useGantt(tickets, { dayViewDate: dayViewDate ?? undefined });
+  const [pendingDateChange, setPendingDateChange] = useState<PendingDateChange | null>(null);
+  const { config, days, totalWidth, getDatePosition } = useGantt(tickets, { dayViewDate: dayViewDate ?? undefined });
 
   // Group tickets by customer
   const customerGroups = useMemo((): CustomerGroup[] => {
@@ -65,41 +81,6 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
       tickets.length * config.rowHeight;
   }, [config.headerHeight, config.rowHeight, customerGroups.length, tickets.length]);
 
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (!canEdit) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setDropHighlight(true);
-  }, [canEdit]);
-
-  const handleDragLeave = useCallback(() => {
-    setDropHighlight(false);
-  }, []);
-
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    setDropHighlight(false);
-
-    const data = e.dataTransfer.getData('application/json');
-    if (!data) return;
-
-    try {
-      const linearTicket: LinearTicket = JSON.parse(data);
-
-      // Calculate drop position relative to the scroll container
-      const scrollEl = scrollRef.current;
-      if (!scrollEl) return;
-
-      const rect = scrollEl.getBoundingClientRect();
-      const x = e.clientX - rect.left + scrollEl.scrollLeft;
-      const startDate = getPositionDate(x);
-
-      await onDropLinearTicket?.(linearTicket, formatDate(startDate));
-    } catch (err) {
-      console.error('Drop failed:', err);
-    }
-  }, [getPositionDate, onDropLinearTicket]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, ticket: GanttTicket, type: DragState['type']) => {
@@ -215,11 +196,61 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
       setDragState(null);
 
       if (newStartDate !== ticket.startDate || newEndDate !== ticket.endDate) {
-        await onUpdate?.(ticket.id, { startDate: newStartDate, endDate: newEndDate });
+        setPendingDateChange({
+          ticket,
+          oldStartDate: dragState.initialStartDate,
+          oldEndDate: dragState.initialEndDate,
+          newStartDate,
+          newEndDate,
+        });
       }
     },
     [dragState, tickets, config.dayWidth, onUpdate]
   );
+
+  const confirmDateChange = useCallback(async () => {
+    if (!pendingDateChange) return;
+    const change = pendingDateChange;
+    setPendingDateChange(null);
+    await onUpdate?.(change.ticket.id, {
+      startDate: change.newStartDate,
+      endDate: change.newEndDate,
+    });
+  }, [pendingDateChange, onUpdate]);
+
+  const cancelDateChange = useCallback(() => {
+    if (pendingDateChange) {
+      const bar = document.querySelector(
+        `[data-ticket-id="${pendingDateChange.ticket.id}"]`
+      ) as HTMLElement | null;
+
+      if (bar) {
+        const left = getDatePosition(pendingDateChange.oldStartDate);
+        const width =
+          getDatePosition(pendingDateChange.oldEndDate) - left + config.dayWidth;
+        bar.style.left = `${left}px`;
+        bar.style.width = `${width}px`;
+      }
+    }
+    setPendingDateChange(null);
+  }, [pendingDateChange, getDatePosition, config.dayWidth]);
+
+  useEffect(() => {
+    if (!pendingDateChange) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void confirmDateChange();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelDateChange();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pendingDateChange, confirmDateChange, cancelDateChange]);
 
   const handleNotesBlur = useCallback(
     async (ticketId: string, notes: string) => {
@@ -244,15 +275,12 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
   const todayPosition = getDatePosition(new Date());
 
   return (
-    <div className={`gantt-chart ${dropHighlight ? 'drop-highlight' : ''}`} ref={containerRef}>
+    <div className="gantt-chart" ref={containerRef}>
       <div
         ref={scrollRef}
         className="gantt-scroll"
         onPointerMove={dragState ? handlePointerMove : undefined}
         onPointerUp={dragState ? handlePointerUp : undefined}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
         style={{ touchAction: dragState ? 'none' : 'pan-x pan-y' }}
       >
         <div className="gantt-content" style={{ width: totalWidth, height: totalHeight }}>
@@ -337,7 +365,7 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
                             left,
                             top,
                             width,
-                            backgroundColor: ticket.color || '#3b82f6',
+                            backgroundColor: '#0c66e4',
                           }}
                           onClick={() => onSelect?.(ticket)}
                         >
@@ -382,6 +410,31 @@ export function GanttChart({ tickets, onUpdate, onDropLinearTicket, selectedId, 
           </div>
         </div>
       </div>
+      {pendingDateChange && (
+        <div className="date-change-modal-overlay" role="presentation">
+          <div
+            className="date-change-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="date-change-title"
+          >
+            <h2 id="date-change-title">
+              You're moving {pendingDateChange.ticket.customer || 'Unassigned'} - {pendingDateChange.ticket.title} from
+            </h2>
+            <div className="date-change-lines">
+              <p>
+                Due EOD {formatRightEdgeDueDate(pendingDateChange.oldEndDate)} to due EOD {formatRightEdgeDueDate(pendingDateChange.newEndDate)}
+              </p>
+            </div>
+            <div className="date-change-actions">
+              <button className="header-btn" onClick={cancelDateChange}>Cancel</button>
+              <button className="date-change-confirm" onClick={() => void confirmDateChange()} autoFocus>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
