@@ -409,33 +409,35 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
                           >
                             {!ticket.isCustom && !ticket.id.startsWith('custom-') && <span className="bar-id">{ticket.id}</span>}
                             <span className="bar-title">{ticket.title}</span>
-                            {canEdit ? (
-                              <input
-                                type="text"
-                                className="bar-notes"
-                                placeholder="Add note..."
-                                defaultValue={ticket.notes || ''}
-                                onClick={(e) => e.stopPropagation()}
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onBlur={(e) => handleNotesBlur(ticket.id, e.target.value)}
-                                onKeyDown={handleNotesKeyDown}
-                              />
-                            ) : ticket.notes ? (
-                              <span className="bar-notes-readonly">{ticket.notes}</span>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="bar-due-time-toggle"
-                              disabled={!canEdit}
-                              aria-label={`Due time: ${ticket.dueTime ?? 'EOD'}. Click to switch to ${(ticket.dueTime ?? 'EOD') === 'EOD' ? 'AM' : 'EOD'}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void handleDueTimeToggle(ticket);
-                              }}
-                              onPointerDown={(event) => event.stopPropagation()}
-                            >
-                              {ticket.dueTime ?? 'EOD'}
-                            </button>
+                            <div className="bar-meta-controls">
+                              <button
+                                type="button"
+                                className="bar-due-time-toggle"
+                                disabled={!canEdit}
+                                aria-label={`Due time: ${ticket.dueTime ?? 'EOD'}. Click to switch to ${(ticket.dueTime ?? 'EOD') === 'EOD' ? 'AM' : 'EOD'}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleDueTimeToggle(ticket);
+                                }}
+                                onPointerDown={(event) => event.stopPropagation()}
+                              >
+                                {ticket.dueTime ?? 'EOD'}
+                              </button>
+                              {canEdit ? (
+                                <input
+                                  type="text"
+                                  className="bar-notes"
+                                  placeholder="Add note..."
+                                  defaultValue={ticket.notes || ''}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onBlur={(e) => handleNotesBlur(ticket.id, e.target.value)}
+                                  onKeyDown={handleNotesKeyDown}
+                                />
+                              ) : ticket.notes ? (
+                                <span className="bar-notes-readonly">{ticket.notes}</span>
+                              ) : null}
+                            </div>
                           </div>
                           <div
                             className="resize-handle right"
