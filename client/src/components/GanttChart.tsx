@@ -10,7 +10,7 @@ interface CustomerGroup {
 
 interface Props {
   tickets: GanttTicket[];
-  onUpdate?: (id: string, updates: { startDate?: string; endDate?: string; notes?: string }) => Promise<unknown>;
+  onUpdate?: (id: string, updates: { startDate?: string; endDate?: string; notes?: string; dueTime?: 'AM' | 'EOD' }) => Promise<unknown>;
   selectedId?: string;
   onSelect?: (ticket: GanttTicket) => void;
   canEdit?: boolean;
@@ -64,6 +64,7 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
       return [...tickets]
         .sort((a, b) =>
           a.endDate.localeCompare(b.endDate) ||
+          ((a.dueTime ?? 'EOD') === 'AM' ? 0 : 1) - ((b.dueTime ?? 'EOD') === 'AM' ? 0 : 1) ||
           a.startDate.localeCompare(b.startDate) ||
           a.title.localeCompare(b.title)
         )
@@ -291,6 +292,15 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
     []
   );
 
+  const handleDueTimeToggle = useCallback(
+    async (ticket: GanttTicket) => {
+      if (!canEdit) return;
+      const nextDueTime = (ticket.dueTime ?? 'EOD') === 'EOD' ? 'AM' : 'EOD';
+      await onUpdate?.(ticket.id, { dueTime: nextDueTime });
+    },
+    [canEdit, onUpdate]
+  );
+
   // Today line position
   const todayPosition = getDatePosition(new Date());
 
@@ -413,6 +423,19 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
                             ) : ticket.notes ? (
                               <span className="bar-notes-readonly">{ticket.notes}</span>
                             ) : null}
+                            <button
+                              type="button"
+                              className="bar-due-time-toggle"
+                              disabled={!canEdit}
+                              aria-label={`Due time: ${ticket.dueTime ?? 'EOD'}. Click to switch to ${(ticket.dueTime ?? 'EOD') === 'EOD' ? 'AM' : 'EOD'}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDueTimeToggle(ticket);
+                              }}
+                              onPointerDown={(event) => event.stopPropagation()}
+                            >
+                              {ticket.dueTime ?? 'EOD'}
+                            </button>
                           </div>
                           <div
                             className="resize-handle right"

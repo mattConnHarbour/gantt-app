@@ -8,6 +8,7 @@ export interface GanttTicket {
   color?: string;          // Custom color for the bar
   customer?: string;       // Customer name
   notes?: string;          // User notes
+  dueTime?: 'AM' | 'EOD';  // Time of day the ticket is due (defaults to EOD)
   isCustom?: boolean;      // True for non-Linear tickets
   createdAt: string;
   updatedAt: string;

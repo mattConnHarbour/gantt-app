@@ -8,6 +8,7 @@ export interface GanttTicket {
   color?: string;
   customer?: string;
   notes?: string;
+  dueTime?: 'AM' | 'EOD';
   isCustom?: boolean;
   createdAt: string;
   updatedAt: string;

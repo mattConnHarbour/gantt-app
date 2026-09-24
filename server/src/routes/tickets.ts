@@ -17,6 +17,7 @@ interface CreateTicketBody {
   color?: string;
   customer?: string;
   notes?: string;
+  dueTime?: 'AM' | 'EOD';
   isCustom?: boolean;
 }
 
@@ -29,6 +30,7 @@ interface UpdateTicketBody {
   color?: string;
   customer?: string;
   notes?: string;
+  dueTime?: 'AM' | 'EOD';
   isCustom?: boolean;
 }
 
@@ -49,7 +51,7 @@ export async function ticketRoutes(fastify: FastifyInstance): Promise<void> {
 
   // POST /api/tickets - Create a new ticket
   fastify.post<{ Body: CreateTicketBody }>('/api/tickets', async (request, reply) => {
-    const { id, title, description, startDate, endDate, linearUrl, color, customer, notes, isCustom } = request.body;
+    const { id, title, description, startDate, endDate, linearUrl, color, customer, notes, dueTime = 'EOD', isCustom } = request.body;
 
     if (!id || !title || !startDate || !endDate) {
       return reply.status(400).send({ error: 'Missing required fields: id, title, startDate, endDate' });
@@ -64,9 +66,10 @@ export async function ticketRoutes(fastify: FastifyInstance): Promise<void> {
         endDate,
         linearUrl,
         color,
-        customer,
-        notes,
-        isCustom,
+      customer,
+      notes,
+      dueTime,
+      isCustom,
       });
       return reply.status(201).send(ticket);
     } catch (err) {
