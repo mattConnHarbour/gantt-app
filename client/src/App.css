@@ -817,7 +817,7 @@ body {
 
 .gantt-bar .bar-content {
   flex: 1;
-  padding: 0 72px 0 20px;
+  padding: 0 20px;
   overflow: visible;
   display: flex;
   gap: 8px;
@@ -829,23 +829,24 @@ body {
 
 .gantt-bar .bar-due-time-toggle {
   position: absolute;
-  right: 18px;
-  bottom: 0;
+  left: 16px;
+  right: 16px;
+  top: 0;
   z-index: 10;
-  min-width: 36px;
+  min-width: 0;
   padding: 2px 4px;
-  border: none;
-  background: transparent;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  background: rgba(255, 255, 255, 0.8);
   color: #000000;
   font-size: 11px;
   font-weight: 700;
+  text-align: center;
   cursor: pointer;
   touch-action: manipulation;
 }
 
 .gantt-bar .bar-due-time-toggle:hover:not(:disabled) {
-  background: transparent;
-  text-decoration: underline;
+  background: #ffffff;
 }
 
 .gantt-bar .bar-due-time-toggle:disabled {
