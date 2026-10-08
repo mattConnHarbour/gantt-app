@@ -1,6 +1,7 @@
-import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
+import { useRef, useState, useCallback, useMemo } from 'react';
 import type { GanttTicket } from '../types';
 import { parseCalendarDate, useGantt } from '../hooks/useGantt';
+import { EditTicketModal } from './EditTicketModal';
 
 interface CustomerGroup {
   key: string;
@@ -10,7 +11,8 @@ interface CustomerGroup {
 
 interface Props {
   tickets: GanttTicket[];
-  onUpdate?: (id: string, updates: { startDate?: string; endDate?: string; notes?: string; dueTime?: 'AM' | 'EOD' }) => Promise<unknown>;
+  customers: string[];
+  onUpdate?: (id: string, updates: { startDate?: string; endDate?: string; notes?: string; dueTime?: 'AM' | 'EOD'; customer?: string; title?: string; pylonTicketId?: string }) => Promise<unknown>;
   selectedId?: string;
   onSelect?: (ticket: GanttTicket) => void;
   canEdit?: boolean;
@@ -26,36 +28,20 @@ interface DragState {
   initialEndDate: string;
 }
 
-interface PendingDateChange {
-  ticket: GanttTicket;
-  oldStartDate: string;
-  oldEndDate: string;
-  newStartDate: string;
-  newEndDate: string;
-}
-
 const formatDate = (date: Date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
-const formatDueDate = (date: string) => {
-  const dueDate = parseCalendarDate(date);
-  return dueDate.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
 const GROUP_HEADER_HEIGHT = 32;
 
-export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, dayViewDate, sortByDueDate = false }: Props) {
+export function GanttChart({ tickets, customers, onUpdate, selectedId, onSelect, canEdit, dayViewDate, sortByDueDate = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
-  const [pendingDateChange, setPendingDateChange] = useState<PendingDateChange | null>(null);
+  const [dateUpdateError, setDateUpdateError] = useState<string | null>(null);
+  const [editingTicket, setEditingTicket] = useState<GanttTicket | null>(null);
   const { config, days, totalWidth, getDatePosition } = useGantt(tickets, { dayViewDate: dayViewDate ?? undefined });
 
   // Group tickets by customer
@@ -106,6 +92,7 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, ticket: GanttTicket, type: DragState['type']) => {
       if (!canEdit) return;
+      setDateUpdateError(null);
       e.preventDefault();
       e.stopPropagation();
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -217,79 +204,25 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
       setDragState(null);
 
       if (newStartDate !== ticket.startDate || newEndDate !== ticket.endDate) {
-        setPendingDateChange({
-          ticket,
-          oldStartDate: dragState.initialStartDate,
-          oldEndDate: dragState.initialEndDate,
-          newStartDate,
-          newEndDate,
-        });
+        try {
+          await onUpdate?.(ticket.id, {
+            startDate: newStartDate,
+            endDate: newEndDate,
+          });
+        } catch (err) {
+          const bar = containerRef.current?.querySelector<HTMLElement>(
+            `[data-ticket-id="${ticket.id}"]`
+          );
+          if (bar) {
+            const left = getDatePosition(ticket.startDate);
+            bar.style.left = `${left}px`;
+            bar.style.width = `${getDatePosition(ticket.endDate) - left + config.dayWidth}px`;
+          }
+          setDateUpdateError(err instanceof Error ? err.message : 'Failed to save date change');
+        }
       }
     },
-    [dragState, tickets, config.dayWidth, onUpdate]
-  );
-
-  const confirmDateChange = useCallback(async () => {
-    if (!pendingDateChange) return;
-    const change = pendingDateChange;
-    setPendingDateChange(null);
-    await onUpdate?.(change.ticket.id, {
-      startDate: change.newStartDate,
-      endDate: change.newEndDate,
-    });
-  }, [pendingDateChange, onUpdate]);
-
-  const cancelDateChange = useCallback(() => {
-    if (pendingDateChange) {
-      const bar = document.querySelector(
-        `[data-ticket-id="${pendingDateChange.ticket.id}"]`
-      ) as HTMLElement | null;
-
-      if (bar) {
-        const left = getDatePosition(pendingDateChange.oldStartDate);
-        const width =
-          getDatePosition(pendingDateChange.oldEndDate) - left + config.dayWidth;
-        bar.style.left = `${left}px`;
-        bar.style.width = `${width}px`;
-      }
-    }
-    setPendingDateChange(null);
-  }, [pendingDateChange, getDatePosition, config.dayWidth]);
-
-  useEffect(() => {
-    if (!pendingDateChange) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        void confirmDateChange();
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        cancelDateChange();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [pendingDateChange, confirmDateChange, cancelDateChange]);
-
-  const handleNotesBlur = useCallback(
-    async (ticketId: string, notes: string) => {
-      const ticket = tickets.find(t => t.id === ticketId);
-      if (ticket && notes !== (ticket.notes || '')) {
-        await onUpdate?.(ticketId, { notes });
-      }
-    },
-    [tickets, onUpdate]
-  );
-
-  const handleNotesKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter' || e.key === 'Escape') {
-        e.currentTarget.blur();
-      }
-    },
-    []
+    [dragState, tickets, config.dayWidth, getDatePosition, onUpdate]
   );
 
   const handleDueTimeToggle = useCallback(
@@ -306,6 +239,7 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
 
   return (
     <div className="gantt-chart" ref={containerRef}>
+      {dateUpdateError && <p className="gantt-update-error" role="alert">{dateUpdateError}. Try dragging again.</p>}
       <div
         ref={scrollRef}
         className="gantt-scroll"
@@ -398,6 +332,12 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
                             backgroundColor: '#7a869a',
                           }}
                           onClick={() => onSelect?.(ticket)}
+                          onDoubleClick={(event) => {
+                            if (!canEdit || !onUpdate) return;
+                            if ((event.target as HTMLElement).closest('input, button, a')) return;
+                            event.stopPropagation();
+                            setEditingTicket(ticket);
+                          }}
                         >
                           <div
                             className="resize-handle left"
@@ -423,20 +363,20 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
                               >
                                 {ticket.dueTime ?? 'EOD'}
                               </button>
-                              {canEdit ? (
-                                <input
-                                  type="text"
-                                  className="bar-notes"
-                                  placeholder="Add note..."
-                                  defaultValue={ticket.notes || ''}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  onBlur={(e) => handleNotesBlur(ticket.id, e.target.value)}
-                                  onKeyDown={handleNotesKeyDown}
-                                />
-                              ) : ticket.notes ? (
-                                <span className="bar-notes-readonly">{ticket.notes}</span>
-                              ) : null}
+                              {ticket.pylonTicketId && (
+                                <a
+                                  className="bar-pylon-link"
+                                  href={`https://app.usepylon.com/support/issues/views/inbox?issueNumber=${encodeURIComponent(ticket.pylonTicketId)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label={`Open Pylon ticket ${ticket.pylonTicketId}`}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onDoubleClick={(event) => event.stopPropagation()}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                >
+                                  Pylon #{ticket.pylonTicketId}
+                                </a>
+                              )}
                             </div>
                           </div>
                           <div
@@ -455,31 +395,16 @@ export function GanttChart({ tickets, onUpdate, selectedId, onSelect, canEdit, d
           </div>
         </div>
       </div>
-      {pendingDateChange && (
-        <div className="date-change-modal-overlay" role="presentation">
-          <div
-            className="date-change-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="date-change-title"
-          >
-            <h2 id="date-change-title">
-              You're moving {pendingDateChange.ticket.customer || 'Unassigned'} - {pendingDateChange.ticket.title} from
-            </h2>
-            <div className="date-change-lines">
-              <p>
-                Due EOD {formatDueDate(pendingDateChange.oldEndDate)} to due EOD {formatDueDate(pendingDateChange.newEndDate)}
-              </p>
-            </div>
-            <div className="date-change-actions">
-              <button className="header-btn" onClick={cancelDateChange}>Cancel</button>
-              <button className="date-change-confirm" onClick={() => void confirmDateChange()} autoFocus>
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+      {editingTicket && canEdit && onUpdate && (
+        <EditTicketModal
+          key={editingTicket.id}
+          ticket={editingTicket}
+          customers={customers}
+          onSave={onUpdate}
+          onClose={() => setEditingTicket(null)}
+        />
       )}
+
     </div>
   );
 }

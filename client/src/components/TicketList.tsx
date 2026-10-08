@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { GanttTicket, LinearTicket } from '../types';
 import * as api from '../api';
+import { CustomerInput } from './CustomerInput';
 
 interface Props {
   tickets: GanttTicket[];
   onDelete?: (id: string) => Promise<void>;
   onAdd?: (ticket: LinearTicket) => Promise<void>;
-  onAddCustom?: (customer: string, title: string) => Promise<void>;
+  onAddCustom?: (customer: string, title: string, pylonTicketId?: string) => Promise<void>;
   onSelect?: (ticket: GanttTicket) => void;
   selectedId?: string;
   canEdit?: boolean;
@@ -20,6 +21,8 @@ export function TicketList({ tickets, onDelete, onAdd, onAddCustom, onSelect, se
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customCustomer, setCustomCustomer] = useState('');
   const [customTitle, setCustomTitle] = useState('');
+  const [pylonTicketId, setPylonTicketId] = useState('');
+  const pylonIdValid = !pylonTicketId.trim() || /^[0-9]+$/.test(pylonTicketId.trim());
   const [customAdding, setCustomAdding] = useState(false);
 
   // Load tickets from server on mount
@@ -90,12 +93,13 @@ export function TicketList({ tickets, onDelete, onAdd, onAddCustom, onSelect, se
   };
 
   const handleAddCustom = async () => {
-    if (!customCustomer.trim() || !customTitle.trim() || !onAddCustom) return;
+    if (!customCustomer.trim() || !customTitle.trim() || !pylonIdValid || !onAddCustom || customAdding) return;
     setCustomAdding(true);
     try {
-      await onAddCustom(customCustomer.trim(), customTitle.trim());
+      await onAddCustom(customCustomer.trim(), customTitle.trim(), pylonTicketId.trim());
       setCustomCustomer('');
       setCustomTitle('');
+      setPylonTicketId('');
       setShowCustomForm(false);
     } catch (err) {
       console.error('Failed to add custom item:', err);
@@ -140,12 +144,13 @@ export function TicketList({ tickets, onDelete, onAdd, onAddCustom, onSelect, se
           </div>
           {showCustomForm && (
             <div className="custom-form">
-              <input
-                type="text"
+              <CustomerInput
+                customers={tickets.map(ticket => ticket.customer ?? '')}
                 className="custom-input"
-                placeholder="Customer name"
+                placeholder="Customer"
+                aria-label="Customer"
                 value={customCustomer}
-                onChange={(e) => setCustomCustomer(e.target.value)}
+                onChange={setCustomCustomer}
               />
               <input
                 type="text"
@@ -157,10 +162,22 @@ export function TicketList({ tickets, onDelete, onAdd, onAddCustom, onSelect, se
                   if (e.key === 'Enter') handleAddCustom();
                 }}
               />
+              <input
+                type="text"
+                inputMode="numeric"
+                className="custom-input"
+                placeholder="Pylon ticket ID (optional)"
+                aria-label="Pylon ticket ID (optional)"
+                value={pylonTicketId}
+                onChange={(event) => setPylonTicketId(event.target.value)}
+                onKeyDown={(event) => event.key === 'Enter' && handleAddCustom()}
+                aria-invalid={!pylonIdValid}
+              />
+              {!pylonIdValid && <p className="pylon-id-error" role="alert">Enter a numeric Pylon ticket ID.</p>}
               <button
                 className="add-custom-btn"
                 onClick={handleAddCustom}
-                disabled={customAdding || !customCustomer.trim() || !customTitle.trim()}
+                disabled={customAdding || !customCustomer.trim() || !customTitle.trim() || !pylonIdValid}
               >
                 {customAdding ? 'Adding...' : 'Add'}
               </button>

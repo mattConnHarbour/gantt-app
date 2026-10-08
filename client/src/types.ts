@@ -5,6 +5,7 @@ export interface GanttTicket {
   startDate: string;
   endDate: string;
   linearUrl?: string;
+  pylonTicketId?: string;
   color?: string;
   customer?: string;
   notes?: string;

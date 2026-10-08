@@ -827,16 +827,21 @@ body {
   min-width: 0;
 }
 
-.gantt-bar .bar-due-time-toggle {
-  width: 50%;
+.gantt-bar .bar-due-time-toggle,
+.gantt-bar .bar-pylon-link {
+  width: 100%;
   align-self: flex-start;
   padding: 2px 4px;
   border: 1px solid rgba(0, 0, 0, 0.35);
   background: rgba(255, 255, 255, 0.8);
   color: #000000;
+  border-radius: 0;
+  font-family: inherit;
   font-size: 11px;
   font-weight: 700;
+  line-height: 14px;
   text-align: center;
+  text-decoration: none;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -851,8 +856,19 @@ body {
   flex-shrink: 0;
 }
 
-.gantt-bar .bar-due-time-toggle:hover:not(:disabled) {
+.gantt-bar .bar-due-time-toggle:hover:not(:disabled),
+.gantt-bar .bar-pylon-link:hover {
   background: #ffffff;
+}
+
+.gantt-bar .bar-pylon-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pylon-id-error {
+  color: var(--error);
+  font-size: 12px;
 }
 
 .gantt-bar .bar-due-time-toggle:disabled {
@@ -912,70 +928,6 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
-.gantt-bar .bar-notes {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--text-primary);
-  font-size: 12px;
-  padding: 4px 8px;
-  min-width: 100px;
-  max-width: 200px;
-  width: 100%;
-  cursor: text;
-}
-
-.gantt-bar .bar-notes:focus {
-  outline: none;
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.gantt-bar .bar-notes::placeholder {
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.gantt-bar .bar-notes-readonly {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.3);
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-/* Date change confirmation */
-.date-change-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgba(9, 30, 66, 0.54);
-}
-
-.date-change-modal {
-  width: min(520px, 100%);
-  padding: 24px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  box-shadow: 0 8px 24px rgba(9, 30, 66, 0.25);
-}
-
-.date-change-modal h2 {
-  margin-bottom: 20px;
-  font-size: 18px;
-  line-height: 1.4;
-}
-
-.date-change-lines {
-  display: grid;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-
 .date-change-actions {
   display: flex;
   justify-content: flex-end;
@@ -995,6 +947,101 @@ body {
 .date-change-confirm:focus {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
+}
+
+.customer-autocomplete {
+  position: relative;
+  min-width: 0;
+}
+
+.customer-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(9, 30, 66, 0.2);
+}
+
+.customer-suggestions li {
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.customer-suggestions li:hover,
+.customer-suggestions li.active {
+  background: var(--bg-tertiary);
+}
+
+.edit-ticket-modal {
+  margin: auto;
+  width: min(520px, calc(100% - 40px));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  padding: 24px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 24px rgba(9, 30, 66, 0.25);
+}
+
+.edit-ticket-modal::backdrop {
+  background: rgba(9, 30, 66, 0.54);
+}
+
+.edit-ticket-modal h2 {
+  margin-bottom: 24px;
+  font-size: 18px;
+}
+
+.edit-ticket-fields {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.edit-ticket-fields label:not(:first-child) {
+  margin-top: 8px;
+}
+
+.edit-ticket-fields input,
+.edit-ticket-fields textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.edit-ticket-fields textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.edit-ticket-fields input:focus,
+.edit-ticket-fields textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.edit-ticket-modal button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.edit-ticket-error {
+  margin-top: 16px;
+  color: #dc2626;
+  font-size: 14px;
 }
 
 /* Focus View */
@@ -1480,4 +1527,11 @@ body {
 .due-date-text.tomorrow {
   color: #f59e0b;
   font-weight: 500;
+}
+
+.gantt-update-error {
+  padding: 8px 12px;
+  color: var(--error);
+  background: var(--bg-primary);
+  font-size: 14px;
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { CustomerInput } from './CustomerInput';
 
 interface Props {
   main: React.ReactNode;
@@ -14,7 +15,7 @@ interface Props {
   customers?: string[];
   customerFilter?: string;
   onCustomerFilterChange?: (customer: string) => void;
-  onAddCustom?: (customer: string, title: string) => Promise<void>;
+  onAddCustom?: (customer: string, title: string, pylonTicketId?: string) => Promise<void>;
   viewMode?: 'gantt' | 'dueDate';
   sortByDueDate?: boolean;
   onSortByDueDateToggle?: () => void;
@@ -25,6 +26,7 @@ export function Layout({
   hasSelection,
   onRemove,
   canEdit,
+  customers = [],
   onAddCustom,
   viewMode = 'gantt',
   sortByDueDate = false,
@@ -33,6 +35,8 @@ export function Layout({
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [customCustomer, setCustomCustomer] = useState('');
   const [customTitle, setCustomTitle] = useState('');
+  const [pylonTicketId, setPylonTicketId] = useState('');
+  const pylonIdValid = !pylonTicketId.trim() || /^[0-9]+$/.test(pylonTicketId.trim());
   const [isAdding, setIsAdding] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { user, signOut } = useAuth();
@@ -48,12 +52,13 @@ export function Layout({
   }, []);
 
   const handleAddCustom = async () => {
-    if (!customCustomer.trim() || !customTitle.trim() || !onAddCustom) return;
+    if (!customCustomer.trim() || !customTitle.trim() || !pylonIdValid || !onAddCustom || isAdding) return;
     setIsAdding(true);
     try {
-      await onAddCustom(customCustomer.trim(), customTitle.trim());
+      await onAddCustom(customCustomer.trim(), customTitle.trim(), pylonTicketId.trim());
       setCustomCustomer('');
       setCustomTitle('');
+      setPylonTicketId('');
       setShowAddDropdown(false);
     } finally {
       setIsAdding(false);
@@ -94,12 +99,13 @@ export function Layout({
               </button>
               {showAddDropdown && (
                 <div className="add-item-menu">
-                  <input
-                    type="text"
+                  <CustomerInput
+                    customers={customers}
                     className="add-item-input"
                     placeholder="Customer"
+                    aria-label="Customer"
                     value={customCustomer}
-                    onChange={(e) => setCustomCustomer(e.target.value)}
+                    onChange={setCustomCustomer}
                     autoFocus
                   />
                   <input
@@ -110,10 +116,22 @@ export function Layout({
                     onChange={(e) => setCustomTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
                   />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="add-item-input"
+                    placeholder="Pylon ticket ID (optional)"
+                    aria-label="Pylon ticket ID (optional)"
+                    value={pylonTicketId}
+                    onChange={(event) => setPylonTicketId(event.target.value)}
+                    onKeyDown={(event) => event.key === 'Enter' && handleAddCustom()}
+                    aria-invalid={!pylonIdValid}
+                  />
+                  {!pylonIdValid && <p className="pylon-id-error" role="alert">Enter a numeric Pylon ticket ID.</p>}
                   <button
                     className="add-item-submit"
                     onClick={handleAddCustom}
-                    disabled={isAdding || !customCustomer.trim() || !customTitle.trim()}
+                    disabled={isAdding || !customCustomer.trim() || !customTitle.trim() || !pylonIdValid}
                   >
                     {isAdding ? 'Adding...' : 'Add'}
                   </button>

@@ -5,6 +5,7 @@ export interface GanttTicket {
   startDate: string;       // ISO date
   endDate: string;         // ISO date
   linearUrl?: string;      // Link back to Linear
+  pylonTicketId?: string;  // Pylon issue number
   color?: string;          // Custom color for the bar
   customer?: string;       // Customer name
   notes?: string;          // User notes

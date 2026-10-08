@@ -98,7 +98,7 @@ export function App() {
     }
   };
 
-  const handleAddCustomItem = async (customer: string, title: string) => {
+  const handleAddCustomItem = async (customer: string, title: string, pylonTicketId?: string) => {
     const today = new Date();
     const startDate = today.toISOString().split('T')[0];
     const endDate = new Date(today);
@@ -111,6 +111,7 @@ export function App() {
       endDate: endDate.toISOString().split('T')[0],
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
       customer,
+      pylonTicketId,
       isCustom: true,
     });
   };
@@ -159,6 +160,7 @@ export function App() {
         ) : (
           <GanttChart
             tickets={filteredTickets}
+            customers={customers}
             onUpdate={canEdit ? updateTicket : undefined}
             selectedId={selectedId}
             onSelect={handleSelect}
