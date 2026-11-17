@@ -73,6 +73,27 @@ export async function createTicket(ticket: Omit<GanttTicket, 'createdAt' | 'upda
   });
 }
 
+/** Create a batch in one write, returning existing entries when an event is retried. */
+export async function createTicketsOnce(tickets: Array<Omit<GanttTicket, 'createdAt' | 'updatedAt'>>): Promise<GanttTicket[]> {
+  return mutate(async () => {
+    const store = await readStore();
+    const now = new Date().toISOString();
+    const results: GanttTicket[] = [];
+    let changed = false;
+    for (const ticket of tickets) {
+      let stored = store.tickets.find(item => item.id === ticket.id);
+      if (!stored) {
+        stored = { ...ticket, createdAt: now, updatedAt: now };
+        store.tickets.push(stored);
+        changed = true;
+      }
+      results.push(stored);
+    }
+    if (changed) await writeStore(store);
+    return results;
+  });
+}
+
 export async function updateTicket(
   id: string,
   updates: Partial<Omit<GanttTicket, 'id' | 'createdAt' | 'updatedAt'>>

@@ -20,7 +20,7 @@ test('signed Slack events create one task and reject forged requests', async () 
   const app = Fastify();
   await app.register(slackRoutes);
   const posts: any[] = [];
-  let modelPlan: any = { action: 'schedule', reply: '', customer: 'Acme', title: 'Fix export', startDate: '2026-11-19', endDate: '2026-11-20' };
+  let modelPlan: any = { action: 'schedule', reply: '', tasks: [{ customer: 'Acme', title: 'Fix export', startDate: '2026-11-19', endDate: '2026-11-20' }] };
   let modelInput: any;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
@@ -56,7 +56,7 @@ test('signed Slack events create one task and reject forged requests', async () 
     const botSignature = `v0=${createHmac('sha256', 'test-secret').update(`v0:${timestamp}:${botEvent}`).digest('hex')}`;
     await app.inject({ method: 'POST', url: '/api/slack/events', headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': timestamp, 'x-slack-signature': botSignature }, payload: botEvent });
     assert.equal(posts.length, 2);
-    modelPlan = { action: 'reply', reply: 'Acme has Fix export on the chart.', customer: null, title: null, startDate: null, endDate: null };
+    modelPlan = { action: 'reply', reply: 'Acme has Fix export on the chart.', tasks: [] };
     const question = JSON.stringify({ type: 'event_callback', event_id: 'EvQuestion', event: { type: 'message', channel_type: 'im', user: 'U1', channel: 'D1', ts: '1794931500.000001', text: 'What is on the chart for Acme?' } });
     const questionSignature = `v0=${createHmac('sha256', 'test-secret').update(`v0:${timestamp}:${question}`).digest('hex')}`;
     await app.inject({ method: 'POST', url: '/api/slack/events', headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': timestamp, 'x-slack-signature': questionSignature }, payload: question });
@@ -94,8 +94,8 @@ test('signed Slack events create one task and reject forged requests', async () 
         const payload = JSON.parse(JSON.parse(String(init?.body)).input);
         modelCalls++;
         const plan = modelCalls === 1
-          ? { action: 'search', reply: '', slackQuery: 'Acme demo', granolaQuery: null, customer: null, title: null, startDate: null, endDate: null }
-          : { action: 'reply', reply: `Found: ${payload.searchResults.slack.matches[0].text}`, slackQuery: null, granolaQuery: null, customer: null, title: null, startDate: null, endDate: null };
+          ? { action: 'search', reply: '', slackQuery: 'Acme demo', granolaQuery: null, tasks: [] }
+          : { action: 'reply', reply: `Found: ${payload.searchResults.slack.matches[0].text}`, slackQuery: null, granolaQuery: null, tasks: [] };
         return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(plan) }] }] });
       }
       if (String(url).includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body))); return Response.json({ ok: true }); }
@@ -108,5 +108,30 @@ test('signed Slack events create one task and reject forged requests', async () 
     assert.equal(modelCalls, 2);
     assert.match(posts[3].text, /Acme demo is ready/);
     assert.equal((await storage.getAllTickets()).length, 2);
+    const multiEvent = { type: 'message', channel_type: 'im', user: 'U1', channel: 'D2', ts: '1794931700.000001', text: 'Schedule the two Acme tasks' };
+    const multiItems = [
+      { customer: 'Acme', title: 'Task A', startDate: '2026-11-20', endDate: '2026-11-21' },
+      { customer: 'Acme', title: 'Task B', startDate: '2026-11-22', endDate: '2026-11-23' },
+    ];
+    const { handleMention } = await import('../src/services/gandalf.js');
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [] });
+      if (String(url).includes('openai.com')) return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(modelPlan) }] }] });
+      if (String(url).includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body))); return Response.json({ ok: true }); }
+      throw new Error('Unexpected multi-task request');
+    }) as typeof fetch;
+    modelPlan = { action: 'schedule', reply: '', tasks: multiItems };
+    await handleMention('EvMultiple', multiEvent);
+    assert.equal((await storage.getAllTickets()).length, 4);
+    assert.match(posts.at(-1).text, /Scheduled 2 items/);
+    assert.match(posts.at(-1).text, /Task A/);
+    assert.match(posts.at(-1).text, /Task B/);
+    await handleMention('EvMultiple', multiEvent);
+    assert.equal((await storage.getAllTickets()).length, 4, 'retries do not duplicate tasks');
+    modelPlan = { action: 'schedule', reply: 'When is Task B due?', tasks: [multiItems[0], { ...multiItems[1], endDate: null }] };
+    await handleMention('EvIncomplete', multiEvent);
+    assert.equal((await storage.getAllTickets()).length, 4, 'an incomplete batch is not partially created');
+    assert.match(posts.at(-1).text, /item 2/);
+    assert.match(posts.at(-1).text, /When is Task B due/);
   } finally { globalThis.fetch = originalFetch; await app.close(); await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
