@@ -1,7 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import * as storage from './storage.js';
 
-type SlackEvent = { type: string; channel: string; ts: string; thread_ts?: string; text: string; user?: string; bot_id?: string };
+type SlackEvent = { type: string; channel: string; ts: string; thread_ts?: string; text: string; user?: string; bot_id?: string; channel_type?: string };
 type Message = { text?: string; ts?: string; user?: string; bot_id?: string };
 type Extraction = { customer: string | null; title: string | null; startDate: string | null; endDate: string | null; question: string | null };
 
@@ -21,6 +21,12 @@ async function slack(method: string, params: Record<string, string>, token: stri
 }
 
 async function threadContext(event: SlackEvent): Promise<Message[]> {
+  if (!event.thread_ts && event.channel_type === 'im') {
+    const result = await slack('conversations.history', { channel: event.channel, latest: event.ts, inclusive: 'true', limit: '20' }, process.env.SLACK_BOT_TOKEN!);
+    const messages = (result.messages as Message[]).filter(m => m.text && (!m.ts || Number(m.ts) <= Number(event.ts))).reverse();
+    if (!messages.some(m => m.ts === event.ts)) messages.push({ text: event.text, ts: event.ts, user: event.user });
+    return messages;
+  }
   if (!event.thread_ts) return [{ text: event.text, ts: event.ts, user: event.user }];
   const token = process.env.SLACK_HISTORY_TOKEN || process.env.SLACK_BOT_TOKEN!;
   const messages: Message[] = [];
@@ -61,14 +67,14 @@ async function extract(messages: Message[], event: SlackEvent): Promise<Extracti
 
 export async function handleMention(eventId: string, event: SlackEvent): Promise<void> {
   const token = process.env.SLACK_BOT_TOKEN!;
-  const post = (text: string) => slack('chat.postMessage', { channel: event.channel, thread_ts: event.thread_ts || event.ts, text }, token);
+  const post = (text: string) => slack('chat.postMessage', { channel: event.channel, ...((event.channel_type !== 'im' || event.thread_ts) ? { thread_ts: event.thread_ts || event.ts } : {}), text }, token);
   try {
     if (!process.env.OPENAI_API_KEY || !token) throw new Error('Gandalf is missing its API credentials');
     const task = await extract(await threadContext(event), event);
     const customer = typeof task.customer === 'string' ? task.customer.trim() : '';
     const title = typeof task.title === 'string' ? task.title.trim() : '';
     if (!customer || !title || !validDate(task.startDate) || !validDate(task.endDate) || task.startDate > task.endDate || task.question) {
-      await post(`I need a little more detail before scheduling: ${task.question || 'Please provide the customer, task title, and valid start and end dates.'} Please @mention me in your reply.`);
+      await post(`I need a little more detail before scheduling: ${task.question || 'Please provide the customer, task title, and valid start and end dates.'} ${event.channel_type === 'im' ? 'Reply here with the missing details.' : 'Please @mention me in your reply.'}`);
       return;
     }
     const id = `custom-slack-${createHash('sha256').update(eventId).digest('hex').slice(0, 24)}`;

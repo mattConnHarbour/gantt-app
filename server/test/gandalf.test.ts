@@ -20,6 +20,7 @@ test('signed Slack events create one task and reject forged requests', async () 
   const posts: any[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [{ ts: '1794931300.000001', user: 'U1', text: 'Schedule Acme export on November 20' }] });
     if (String(url).includes('openai.com')) return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify({ customer: 'Acme', title: 'Fix export', startDate: '2026-11-19', endDate: '2026-11-20', question: null }) }] }] });
     if (String(url).includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body))); return Response.json({ ok: true }); }
     throw new Error(`Unexpected request: ${url}`);
@@ -40,5 +41,16 @@ test('signed Slack events create one task and reject forged requests', async () 
     assert.equal(tickets[0].startDate, '2026-11-19');
     assert.match(posts[0].text, /Scheduled/);
     assert.equal(validDate('2026-02-30'), false);
+    const dm = JSON.stringify({ type: 'event_callback', event_id: 'EvDM', event: { type: 'message', channel_type: 'im', user: 'U1', channel: 'D1', ts: '1794931300.000001', text: 'Schedule Acme export on November 20' } });
+    const dmSignature = `v0=${createHmac('sha256', 'test-secret').update(`v0:${timestamp}:${dm}`).digest('hex')}`;
+    assert.equal((await app.inject({ method: 'POST', url: '/api/slack/events', headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': timestamp, 'x-slack-signature': dmSignature }, payload: dm })).statusCode, 200);
+    for (let i = 0; i < 100 && posts.length < 2; i++) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal((await storage.getAllTickets()).length, 2);
+    assert.equal(posts[1].channel, 'D1');
+    assert.equal(posts[1].thread_ts, undefined);
+    const botEvent = JSON.stringify({ type: 'event_callback', event_id: 'EvBot', event: { type: 'message', channel_type: 'im', subtype: 'bot_message', bot_id: 'B1', user: 'U1', channel: 'D1', ts: '1794931400.000001', text: 'Scheduled' } });
+    const botSignature = `v0=${createHmac('sha256', 'test-secret').update(`v0:${timestamp}:${botEvent}`).digest('hex')}`;
+    await app.inject({ method: 'POST', url: '/api/slack/events', headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': timestamp, 'x-slack-signature': botSignature }, payload: botEvent });
+    assert.equal(posts.length, 2);
   } finally { globalThis.fetch = originalFetch; await app.close(); await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
