@@ -4,6 +4,7 @@ import { handleMention, verifySlackSignature } from '../services/gandalf.js';
 export async function slackRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_request, body, done) => done(null, body));
   const processing = new Map<string, number>();
+  const channelQueues = new Map<string, Promise<void>>();
   fastify.post<{ Body: string }>('/api/slack/events', async (request, reply) => {
     const signature = request.headers['x-slack-signature'];
     const timestamp = request.headers['x-slack-request-timestamp'];
@@ -20,7 +21,10 @@ export async function slackRoutes(fastify: FastifyInstance): Promise<void> {
     for (const [id, seen] of processing) if (now - seen > 3600000) processing.delete(id);
     if (!processing.has(payload.event_id)) {
       processing.set(payload.event_id, now);
-      void handleMention(payload.event_id, event);
+      const previous = channelQueues.get(event.channel) || Promise.resolve();
+      const next = previous.then(() => handleMention(payload.event_id, event));
+      channelQueues.set(event.channel, next);
+      void next.finally(() => { if (channelQueues.get(event.channel) === next) channelQueues.delete(event.channel); });
     }
     return reply.code(200).send();
   });

@@ -4,7 +4,7 @@ Gandalf answers questions, reads the current Gantt chart, and adds custom tasks 
 
 > @Gandalf Schedule the Acme export fix from December 1 to December 3.
 
-In a thread, Gandalf uses the earlier thread messages to infer the customer and task. If a required detail is missing or ambiguous, it asks a question. For channel threads, reply in the same thread and @mention Gandalf again. In a direct message, reply normally without a mention. Gandalf reads up to 20 recent direct messages for context. A single specified date is used as both the start and end date. Relative dates use `GANDALF_TIMEZONE` (default `America/New_York`). The chart refreshes its data every 30 seconds.
+In a thread, Gandalf uses the earlier thread messages to infer the customer and task. If a required detail is missing or ambiguous, it asks a question. For channel threads, reply in the same thread and @mention Gandalf again. In a direct message, reply normally without a mention. Gandalf keeps the last 100 Gandalf exchanges separately for each channel or direct message, and also reads up to 20 recent direct messages or the current Slack thread for context. Exchanges are stored on the same persistent volume as the chart; earlier exchanges are not backfilled. A single specified date is used as both the start and end date. Relative dates use `GANDALF_TIMEZONE` (default `America/New_York`). The chart refreshes its data every 30 seconds.
 
 ## Set up
 
@@ -17,3 +17,9 @@ In a thread, Gandalf uses the earlier thread messages to infer the customer and 
 Slack's thread access and rate limits depend on app distribution and token type. If `conversations.replies` fails for channel threads, provide `SLACK_HISTORY_TOKEN` as an authorized user token with `channels:history` and/or `groups:history`, and ensure that user can access the channels. Slack conversation text and current chart data are sent to OpenAI to answer requests; only use the bot in channels where that is appropriate. Only the thread up to the mention is read; a top-level mention uses its own message, not preceding channel history.
 
 The existing storage is a local JSON file. Ensure the Railway service runs **one instance** and its existing data directory is on persistent storage, with backups, before relying on the chart. `GANTT_DATA_DIR` can select a mounted directory, but moving an existing chart requires migrating its `tickets.json` first. The write lock and Slack retry suppression are per process; asynchronous events can be lost if the process stops immediately after acknowledging them. A durable queue and shared transactional database are needed for stronger delivery guarantees or multiple instances.
+
+## Read-only search
+
+Personal Slack and Granola searches are restricted to the configured owner's direct chat with Gandalf, not channels or other users. Set `GANDALF_SEARCH_OWNER` to the owner's Slack user ID. Set `SLACK_SEARCH_TOKEN` to that person's Slack user OAuth token with `search:read`; the bot verifies the token identity and workspace before each Slack search. Set `GRANOLA_API_KEY` to the same person's authorized Granola API key. These credentials are separate from the connections used by ChatGPT and must be configured on Railway.
+
+Slack results are bounded to 10 messages and include source links. Granola searches scan at most 300 accessible note records and return up to 10 matches; the API path used here does not search full transcripts and reports when the scan is incomplete. Search results, conversation text and chart data may be sent to OpenAI. Do not enable a shared search credential in channels or for other users.

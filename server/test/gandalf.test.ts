@@ -13,6 +13,7 @@ process.env.OPENAI_API_KEY = 'test-key';
 const { slackRoutes } = await import('../src/routes/slack.js');
 const { validDate } = await import('../src/services/gandalf.js');
 const storage = await import('../src/services/storage.js');
+const { canSearch, searchSlack, searchGranola } = await import('../src/services/search.js');
 
 test('signed Slack events create one task and reject forged requests', async () => {
   const app = Fastify();
@@ -62,6 +63,49 @@ test('signed Slack events create one task and reject forged requests', async () 
     assert.match(posts[2].text, /Acme has Fix export/);
     assert.equal((await storage.getAllTickets()).length, 2);
     assert.equal(modelInput.chart[0].customer, 'Acme');
+    assert.equal(modelInput.priorGandalfTurns.length, 1);
+    assert.equal(modelInput.priorGandalfTurns[0].prompt, 'Schedule Acme export on November 20');
     assert.equal(modelInput.conversation.at(-1).text, 'What is on the chart for Acme?');
+    process.env.GANDALF_SEARCH_OWNER = 'U1';
+    assert.equal(canSearch('im', 'U1'), true);
+    assert.equal(canSearch('channel', 'U1'), false);
+    assert.equal(canSearch('im', 'U2'), false);
+    assert.deepEqual(await searchSlack('Acme', 'U1'), { error: 'Slack search is not connected.' });
+    assert.deepEqual(await searchGranola('Acme'), { error: 'Granola search is not connected.' });
+    process.env.SLACK_SEARCH_TOKEN = 'search-token';
+    process.env.SLACK_TEAM_ID = 'T1';
+    process.env.GRANOLA_API_KEY = 'granola-test';
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      if (String(url).includes('auth.test')) return Response.json({ ok: true, user_id: 'U2', team_id: 'T1' });
+      if (String(url).includes('granola.ai')) return Response.json({ notes: [{ title: 'Acme roadmap', id: 'not_test', summary: 'Demo plan' }], hasMore: false });
+      throw new Error('Unexpected search request');
+    }) as typeof fetch;
+    assert.match((await searchSlack('Acme', 'U1') as any).error, /does not belong/);
+    const found = await searchGranola('Acme') as any;
+    assert.equal(found.matches.length, 1);
+    assert.equal(found.incomplete, false);
+    let modelCalls = 0;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [] });
+      if (String(url).includes('auth.test')) return Response.json({ ok: true, user_id: 'U1', team_id: 'T1' });
+      if (String(url).includes('search.messages')) return Response.json({ ok: true, messages: { matches: [{ text: 'Acme demo is ready', permalink: 'https://example.com/message' }], total: 1 } });
+      if (String(url).includes('openai.com')) {
+        const payload = JSON.parse(JSON.parse(String(init?.body)).input);
+        modelCalls++;
+        const plan = modelCalls === 1
+          ? { action: 'search', reply: '', slackQuery: 'Acme demo', granolaQuery: null, customer: null, title: null, startDate: null, endDate: null }
+          : { action: 'reply', reply: `Found: ${payload.searchResults.slack.matches[0].text}`, slackQuery: null, granolaQuery: null, customer: null, title: null, startDate: null, endDate: null };
+        return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(plan) }] }] });
+      }
+      if (String(url).includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body))); return Response.json({ ok: true }); }
+      throw new Error('Unexpected search flow request');
+    }) as typeof fetch;
+    const searchEvent = JSON.stringify({ type: 'event_callback', team_id: 'T1', event_id: 'EvSearch', event: { type: 'message', channel_type: 'im', user: 'U1', channel: 'D1', ts: '1794931600.000001', text: 'Find Slack messages about the Acme demo' } });
+    const searchSignature = `v0=${createHmac('sha256', 'test-secret').update(`v0:${timestamp}:${searchEvent}`).digest('hex')}`;
+    await app.inject({ method: 'POST', url: '/api/slack/events', headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': timestamp, 'x-slack-signature': searchSignature }, payload: searchEvent });
+    for (let i = 0; i < 100 && posts.length < 4; i++) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(modelCalls, 2);
+    assert.match(posts[3].text, /Acme demo is ready/);
+    assert.equal((await storage.getAllTickets()).length, 2);
   } finally { globalThis.fetch = originalFetch; await app.close(); await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
