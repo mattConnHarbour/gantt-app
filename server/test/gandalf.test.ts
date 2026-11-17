@@ -14,7 +14,7 @@ process.env.OPENAI_REASONING_EFFORT = 'high';
 const { slackRoutes } = await import('../src/routes/slack.js');
 const { validDate } = await import('../src/services/gandalf.js');
 const storage = await import('../src/services/storage.js');
-const { canSearch, searchSlack, searchGranola } = await import('../src/services/search.js');
+const { canSearch, searchSlack, searchGranola, searchPylon } = await import('../src/services/search.js');
 
 test('signed Slack events create one task and reject forged requests', async () => {
   const app = Fastify();
@@ -73,6 +73,7 @@ test('signed Slack events create one task and reject forged requests', async () 
     assert.equal(canSearch('im', 'U2'), false);
     assert.deepEqual(await searchSlack('Acme', 'U1'), { error: 'Slack search is not connected.' });
     assert.deepEqual(await searchGranola('Acme'), { error: 'Granola search is not connected.' });
+    assert.deepEqual(await searchPylon('123'), { error: 'Pylon is not connected.' });
     process.env.SLACK_SEARCH_TOKEN = 'search-token';
     process.env.SLACK_TEAM_ID = 'T1';
     process.env.GRANOLA_API_KEY = 'granola-test';
@@ -85,6 +86,30 @@ test('signed Slack events create one task and reject forged requests', async () 
     const found = await searchGranola('Acme') as any;
     assert.equal(found.matches.length, 1);
     assert.equal(found.incomplete, false);
+    process.env.PYLON_API_TOKEN = 'test-pylon';
+    const methods: string[] = [];
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const endpoint = String(url);
+      methods.push(`${init?.method || 'GET'} ${new URL(endpoint).pathname}`);
+      if (endpoint.endsWith('/issues/search')) {
+        const filter = JSON.parse(String(init?.body)).filter;
+        assert.equal(filter.operator, 'or');
+        assert.equal(filter.subfilters[0].value, 'Acme');
+        return Response.json({ data: [{ id: 'a', number: 1, title: 'Acme issue', body_html: 'Issue body' }], pagination: { has_next_page: true } });
+      }
+      if (endpoint.includes('/messages')) return Response.json({ data: [{ id: 'm1', body_html: 'Details', is_private: true }], pagination: { has_next_page: false } });
+      if (endpoint.endsWith('/issues/123')) return Response.json({ data: { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', number: 123, title: 'Example' } });
+      throw new Error('Unexpected Pylon request');
+    }) as typeof fetch;
+    const pylonResults = await searchPylon('Acme') as any;
+    assert.equal(pylonResults.matches[0].number, 1);
+    assert.equal(pylonResults.incomplete, true);
+    assert.match(pylonResults.coverage, /not full conversation/);
+    const pylonIssue = await searchPylon('#123') as any;
+    assert.equal(pylonIssue.issue.number, 123);
+    assert.equal(pylonIssue.messages[0].body_html, 'Details');
+    assert.ok(methods.every(method => method.startsWith('GET ') || method === 'POST /issues/search'));
+
     let modelCalls = 0;
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [] });

@@ -47,3 +47,42 @@ export async function searchGranola(query: string): Promise<unknown> {
     return { matches: matches.slice(0, 10).map(note => JSON.stringify(note).slice(0, 8000)), totalMatchesInScannedNotes: matches.length, incomplete: more, coverage: 'Searches up to 300 note records, not transcripts.' };
   } catch { return { error: 'Granola search is temporarily unavailable.' }; }
 }
+
+/** Search issue titles and initial bodies, or read a specific issue and its messages. */
+export async function searchPylon(query: string): Promise<unknown> {
+  const token = process.env.PYLON_API_TOKEN;
+  if (!token) return { error: 'Pylon is not connected.' };
+  const trimmed = query.trim();
+  if (!trimmed) return { error: 'A Pylon issue number or search term is required.' };
+  const base = token.startsWith('pylon_api_eu_') ? 'https://api.eu.usepylon.com' : 'https://api.usepylon.com';
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const issueRef = trimmed.replace(/^#/, '');
+  const exact = /^\d+$/.test(issueRef) || /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(issueRef);
+  const safeIssue = (item: any) => ({
+    id: item.id, number: item.number, title: item.title || item.subject, state: item.state,
+    account: item.account, assignee: item.assignee, created_at: item.created_at,
+    latest_message_time: item.latest_message_time, body_html: String(item.body_html || '').slice(0, 8000),
+    link: item.link, external_issues: item.external_issues,
+  });
+  try {
+    if (exact) {
+      const issue = await fetch(`${base}/issues/${encodeURIComponent(issueRef)}`, { headers, signal: AbortSignal.timeout(15000) });
+      if (!issue.ok) return { error: `Pylon issue lookup failed (HTTP ${issue.status}).` };
+      const issueData = await issue.json() as any;
+      if (!issueData.data || typeof issueData.data !== 'object') return { error: 'Pylon returned an invalid issue response.' };
+      const id = issueData.data.id;
+      if (typeof id !== 'string' || !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(id)) return { issue: safeIssue(issueData.data), messages: [], coverage: 'Issue details only; conversation ID was unavailable.' };
+      const messagesResponse = await fetch(`${base}/issues/${encodeURIComponent(id)}/messages?limit=50`, { headers, signal: AbortSignal.timeout(15000) });
+      if (!messagesResponse.ok) return { issue: safeIssue(issueData.data), messages: [], coverage: `Conversation unavailable (HTTP ${messagesResponse.status}).` };
+      const messageData = await messagesResponse.json() as any;
+      if (!Array.isArray(messageData.data)) return { issue: safeIssue(issueData.data), messages: [], coverage: 'Pylon returned an invalid conversation response.' };
+      return { issue: safeIssue(issueData.data), messages: messageData.data.slice(0, 50).map((m: any) => ({ id: m.id, body_html: String(m.body_html || '').slice(0, 4000), sent_at: m.sent_at, is_private: m.is_private, author: m.author })), coverage: 'Up to the first 50 messages; attachments are not read.', incomplete: Boolean(messageData.pagination?.has_next_page) };
+    }
+    const value = trimmed.slice(0, 200);
+    const response = await fetch(`${base}/issues/search`, { method: 'POST', headers, signal: AbortSignal.timeout(15000), body: JSON.stringify({ filter: { operator: 'or', subfilters: [{ field: 'title', operator: 'string_contains', value }, { field: 'body_html', operator: 'string_contains', value }] }, limit: 10 }) });
+    if (!response.ok) return { error: `Pylon issue search failed (HTTP ${response.status}).` };
+    const data = await response.json() as any;
+    if (!Array.isArray(data.data)) return { error: 'Pylon returned an invalid search response.' };
+    return { matches: data.data.slice(0, 10).map(safeIssue), incomplete: Boolean(data.pagination?.has_next_page), coverage: 'Searches issue titles and initial bodies, not full conversation histories; returns at most 10 issues.' };
+  } catch { return { error: 'Pylon is temporarily unavailable.' }; }
+}
