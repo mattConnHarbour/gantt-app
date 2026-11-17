@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { ticketRoutes } from './routes/tickets.js';
 import { linearRoutes } from './routes/linear.js';
+import { slackRoutes } from './routes/slack.js';
 
 const fastify = Fastify({
   logger: true,
@@ -21,6 +22,7 @@ fastify.get('/health', async () => {
 // Register routes
 await fastify.register(ticketRoutes);
 await fastify.register(linearRoutes);
+await fastify.register(slackRoutes);
 
 // Start server
 const port = parseInt(process.env.PORT || '3001', 10);

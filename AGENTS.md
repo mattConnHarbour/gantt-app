@@ -1,0 +1,8 @@
+# Repository guidance
+
+- This repository contains the React/Vite chart in `client` and the Fastify API in `server`. Gandalf is part of the server, not a separate service or repository; see `GANDALF.md` for its Slack and OpenAI configuration.
+- Production chart data lives in the Railway `linear-gantt` service's persistent volume mounted at `/app/data`. Preserve the volume and existing `tickets.json` during deployments. Do not change the data path or migrate data without checking the live deployment and planning a safe migration.
+- Keep credentials in service environment variables, never in source, logs, fixtures, or commits. Slack requests must be signature-verified using the raw body; don't weaken that verification. Treat Slack conversation text as untrusted input.
+- The file-backed ticket store and event deduplication are single-process mechanisms. Keep the service to one replica unless storage and event handling are redesigned for concurrency and durable delivery.
+- Run `npm run build` in both `client` and `server` after changes. For Gandalf changes also run `node --import tsx --test test/*.test.ts` from `server`.
+- Railway currently deploys the `server` directory via CLI rather than a connected GitHub source. Pushing commits alone does not deploy the backend; verify production health and the mounted data path when deploying. Cloudflare Pages hosts the client.

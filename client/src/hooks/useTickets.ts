@@ -22,6 +22,11 @@ export function useTickets() {
 
   useEffect(() => {
     refresh();
+    // Pick up tasks created by Gandalf or other chart users without interrupting editing.
+    const timer = window.setInterval(() => {
+      api.fetchTickets().then(setTickets).catch(() => { /* The next poll will retry. */ });
+    }, 30000);
+    return () => window.clearInterval(timer);
   }, [refresh]);
 
   const addTicket = useCallback(
