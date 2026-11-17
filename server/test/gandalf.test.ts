@@ -18,10 +18,12 @@ test('signed Slack events create one task and reject forged requests', async () 
   const app = Fastify();
   await app.register(slackRoutes);
   const posts: any[] = [];
+  let modelPlan: any = { action: 'schedule', reply: '', customer: 'Acme', title: 'Fix export', startDate: '2026-11-19', endDate: '2026-11-20' };
+  let modelInput: any;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [{ ts: '1794931300.000001', user: 'U1', text: 'Schedule Acme export on November 20' }] });
-    if (String(url).includes('openai.com')) return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify({ customer: 'Acme', title: 'Fix export', startDate: '2026-11-19', endDate: '2026-11-20', question: null }) }] }] });
+    if (String(url).includes('openai.com')) { modelInput = JSON.parse(JSON.parse(String(init?.body)).input); return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(modelPlan) }] }] }); }
     if (String(url).includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body))); return Response.json({ ok: true }); }
     throw new Error(`Unexpected request: ${url}`);
   }) as typeof fetch;
@@ -52,5 +54,14 @@ test('signed Slack events create one task and reject forged requests', async () 
     const botSignature = `v0=${createHmac('sha256', 'test-secret').update(`v0:${timestamp}:${botEvent}`).digest('hex')}`;
     await app.inject({ method: 'POST', url: '/api/slack/events', headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': timestamp, 'x-slack-signature': botSignature }, payload: botEvent });
     assert.equal(posts.length, 2);
+    modelPlan = { action: 'reply', reply: 'Acme has Fix export on the chart.', customer: null, title: null, startDate: null, endDate: null };
+    const question = JSON.stringify({ type: 'event_callback', event_id: 'EvQuestion', event: { type: 'message', channel_type: 'im', user: 'U1', channel: 'D1', ts: '1794931500.000001', text: 'What is on the chart for Acme?' } });
+    const questionSignature = `v0=${createHmac('sha256', 'test-secret').update(`v0:${timestamp}:${question}`).digest('hex')}`;
+    await app.inject({ method: 'POST', url: '/api/slack/events', headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': timestamp, 'x-slack-signature': questionSignature }, payload: question });
+    for (let i = 0; i < 100 && posts.length < 3; i++) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.match(posts[2].text, /Acme has Fix export/);
+    assert.equal((await storage.getAllTickets()).length, 2);
+    assert.equal(modelInput.chart[0].customer, 'Acme');
+    assert.equal(modelInput.conversation.at(-1).text, 'What is on the chart for Acme?');
   } finally { globalThis.fetch = originalFetch; await app.close(); await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
