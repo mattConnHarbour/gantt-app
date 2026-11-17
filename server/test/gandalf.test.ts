@@ -10,6 +10,7 @@ process.env.GANTT_DATA_DIR = await mkdtemp(join(tmpdir(), 'gandalf-test-'));
 process.env.SLACK_SIGNING_SECRET = 'test-secret';
 process.env.SLACK_BOT_TOKEN = 'test-token';
 process.env.OPENAI_API_KEY = 'test-key';
+process.env.OPENAI_REASONING_EFFORT = 'high';
 const { slackRoutes } = await import('../src/routes/slack.js');
 const { validDate } = await import('../src/services/gandalf.js');
 const storage = await import('../src/services/storage.js');
@@ -24,7 +25,7 @@ test('signed Slack events create one task and reject forged requests', async () 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [{ ts: '1794931300.000001', user: 'U1', text: 'Schedule Acme export on November 20' }] });
-    if (String(url).includes('openai.com')) { modelInput = JSON.parse(JSON.parse(String(init?.body)).input); return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(modelPlan) }] }] }); }
+    if (String(url).includes('openai.com')) { const request = JSON.parse(String(init?.body)); assert.equal(request.reasoning.effort, 'high'); modelInput = JSON.parse(request.input); return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(modelPlan) }] }] }); }
     if (String(url).includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body))); return Response.json({ ok: true }); }
     throw new Error(`Unexpected request: ${url}`);
   }) as typeof fetch;
