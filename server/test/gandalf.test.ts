@@ -25,7 +25,7 @@ test('signed Slack events create one task and reject forged requests', async () 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [{ ts: '1794931300.000001', user: 'U1', text: 'Schedule Acme export on November 20' }] });
-    if (String(url).includes('openai.com')) { const request = JSON.parse(String(init?.body)); assert.equal(request.reasoning.effort, 'high'); modelInput = JSON.parse(request.input); return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(modelPlan) }] }] }); }
+    if (String(url).includes('openai.com')) { const request = JSON.parse(String(init?.body)); if (request.text.format.name === 'reasoning_route') return Response.json({status:'completed', output:[{content:[{type:'output_text',text:'{\"tier\":\"high\"}'}]}]}); assert.equal(request.reasoning.effort, 'high'); modelInput = JSON.parse(request.input); return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(modelPlan) }] }] }); }
     if (String(url).includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body))); return Response.json({ ok: true }); }
     throw new Error(`Unexpected request: ${url}`);
   }) as typeof fetch;
@@ -111,12 +111,17 @@ test('signed Slack events create one task and reject forged requests', async () 
     assert.ok(methods.every(method => method.startsWith('GET ') || method === 'POST /issues/search'));
 
     let modelCalls = 0;
+    process.env.OPENAI_LOW_MODEL = 'low-test-model';
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [] });
       if (String(url).includes('auth.test')) return Response.json({ ok: true, user_id: 'U1', team_id: 'T1' });
       if (String(url).includes('search.messages')) return Response.json({ ok: true, messages: { matches: [{ text: 'Acme demo is ready', permalink: 'https://example.com/message' }], total: 1 } });
       if (String(url).includes('openai.com')) {
-        const payload = JSON.parse(JSON.parse(String(init?.body)).input);
+        const request = JSON.parse(String(init?.body));
+        if (request.text.format.name === 'reasoning_route') return Response.json({status:'completed', output:[{content:[{type:'output_text',text:'{\"tier\":\"low\"}'}]}]});
+        assert.equal(request.reasoning.effort, 'low');
+        assert.equal(request.model, 'low-test-model');
+        const payload = JSON.parse(request.input);
         modelCalls++;
         const plan = modelCalls === 1
           ? { action: 'search', reply: '', slackQuery: 'Acme demo', granolaQuery: null, tasks: [] }
@@ -141,7 +146,7 @@ test('signed Slack events create one task and reject forged requests', async () 
     const { handleMention } = await import('../src/services/gandalf.js');
     globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).includes('conversations.history')) return Response.json({ ok: true, messages: [] });
-      if (String(url).includes('openai.com')) return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(modelPlan) }] }] });
+      if (String(url).includes('openai.com')) { const request = JSON.parse(String(init?.body)); if (request.text.format.name === 'reasoning_route') return Response.json({status:'completed', output:[{content:[{type:'output_text',text:'{\"tier\":\"high\"}'}]}]}); return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(modelPlan) }] }] }); }
       if (String(url).includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body))); return Response.json({ ok: true }); }
       throw new Error('Unexpected multi-task request');
     }) as typeof fetch;
