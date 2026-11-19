@@ -4,6 +4,8 @@ import { getConversation, saveTurn } from './conversation.js';
 import { canSearch, searchSlack, searchGranola, searchPylon } from './search.js';
 import { chooseReasoning, type ModelRoute } from './reasoning-router.js';
 import { GANDALF_PERSONALITY } from './personality.js';
+import { safeMarkdown, escapeInline } from './slack-format.js';
+import { createProgress } from './progress.js';
 
 type SlackEvent = { type: string; channel: string; ts: string; thread_ts?: string; text: string; user?: string; bot_id?: string; channel_type?: string };
 type Message = { text?: string; ts?: string; user?: string; bot_id?: string };
@@ -75,8 +77,14 @@ async function respond(messages: Message[], event: SlackEvent, route: ModelRoute
 
 export async function handleMention(eventId: string, event: SlackEvent): Promise<void> {
   const token = process.env.SLACK_BOT_TOKEN!;
+  let progressTs: string | undefined;
   const post = async (text: string) => {
-    await slack('chat.postMessage', { channel: event.channel, ...((event.channel_type !== 'im' || event.thread_ts) ? { thread_ts: event.thread_ts || event.ts } : {}), text }, token);
+    await slack('chat.postMessage', { channel: event.channel, ...((event.channel_type !== 'im' || event.thread_ts) ? { thread_ts: event.thread_ts || event.ts } : {}), markdown_text: text.slice(0, 12000), link_names: 'false' }, token);
+    if (progressTs) {
+      try { await slack('chat.update', { channel: event.channel, ts: progressTs, markdown_text: 'Finished processing this request.' }, token); }
+      catch { console.error('Gandalf could not finish the progress message'); }
+      progressTs = undefined;
+    }
     await saveTurn(event.channel, { eventId, user: event.user || '', prompt: event.text, reply: text, ts: event.ts });
   };
   try {
@@ -84,23 +92,37 @@ export async function handleMention(eventId: string, event: SlackEvent): Promise
     const messages = await threadContext(event);
     const route = await chooseReasoning(messages, await getConversation(event.channel), event.text);
     console.info(`Gandalf reasoning route: ${route.tier}`);
-    let task = await respond(messages, event, route);
+    const planPromise = respond(messages, event, route).then(value => ({ value }), error => ({ error }));
+    if (route.tier === 'high') {
+      try {
+        const progress = safeMarkdown(await createProgress(event.text));
+        const sent = await slack('chat.postMessage', { channel: event.channel, ...((event.channel_type !== 'im' || event.thread_ts) ? { thread_ts: event.thread_ts || event.ts } : {}), markdown_text: progress, link_names: 'false' }, token);
+        if (sent.channel === event.channel && typeof sent.ts === 'string') progressTs = sent.ts;
+      } catch { console.error('Gandalf could not post a progress update'); }
+    }
+    const plan = await planPromise;
+    if ('error' in plan) throw plan.error;
+    let task = plan.value;
     if (task.action === 'search') {
       if (!canSearch(event.channel_type, event.user)) {
         await post('Search is available only in the configured owner’s direct chat.');
         return;
       }
-      const [slack, granola, pylon] = await Promise.all([
+      if (progressTs) {
+        const sources = [task.slackQuery && 'Slack', task.granolaQuery && 'Granola', task.pylonQuery && 'Pylon'].filter(Boolean);
+        try { await slack('chat.update', { channel: event.channel, ts: progressTs, markdown_text: `I’m checking ${sources.length ? sources.join(', ') : 'the available sources'} and will bring the findings together.` }, token); }
+        catch { console.error('Gandalf could not update the progress message'); }
+      }
+      const [slackResult, granola, pylon] = await Promise.all([
         task.slackQuery?.trim() ? searchSlack(task.slackQuery.trim(), event.user!) : Promise.resolve(null),
         task.granolaQuery?.trim() ? searchGranola(task.granolaQuery.trim()) : Promise.resolve(null),
         task.pylonQuery?.trim() ? searchPylon(task.pylonQuery.trim()) : Promise.resolve(null),
       ]);
-      task = await respond(messages, event, route, { slack, granola, pylon });
+      task = await respond(messages, event, route, { slack: slackResult, granola, pylon });
       if (task.action === 'search') throw new Error('OpenAI requested another search');
     }
-    const escapeSlack = (value: string) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     if (task.action === 'reply') {
-      await post(escapeSlack(typeof task.reply === 'string' && task.reply.trim() ? task.reply : 'Could you tell me more about what you need?'));
+      await post(safeMarkdown(typeof task.reply === 'string' && task.reply.trim() ? task.reply : 'Could you tell me more about what you need?'));
       return;
     }
     if (task.action !== 'schedule') throw new Error('OpenAI returned an unknown action');
@@ -115,7 +137,7 @@ export async function handleMention(eventId: string, event: SlackEvent): Promise
       return !customer || !title || !validDate(item.startDate) || !validDate(item.endDate) || item.startDate > item.endDate ? index + 1 : null;
     }).filter(index => index !== null);
     if (invalid.length) {
-      const question = typeof task.reply === 'string' && task.reply.trim() ? ` ${escapeSlack(task.reply.trim())}` : '';
+      const question = typeof task.reply === 'string' && task.reply.trim() ? ` ${safeMarkdown(task.reply.trim())}` : '';
       await post(`I need the customer, title and valid dates for item${invalid.length === 1 ? '' : 's'} ${invalid.join(', ')} before scheduling the request.${question}`);
       return;
     }
@@ -126,8 +148,8 @@ export async function handleMention(eventId: string, event: SlackEvent): Promise
       startDate: item.startDate!, endDate: item.endDate!, isCustom: true, dueTime: 'EOD' as const,
     }));
     const tickets = await storage.createTicketsOnce(inputs);
-    const lines = tickets.map(ticket => `• *${escapeSlack(ticket.title)}* — ${escapeSlack(ticket.customer || '')}: ${ticket.startDate} to ${ticket.endDate}`);
-    await post(`By quill and spell! Scheduled ${tickets.length} ${tickets.length === 1 ? 'item' : 'items'}:\n${lines.join('\n')}\n<${process.env.GANTT_URL || 'https://my-gantt.pages.dev/'}|View the Gantt chart>`);
+    const lines = tickets.map(ticket => `- **${escapeInline(ticket.title)}** — ${escapeInline(ticket.customer || '')}: ${ticket.startDate} to ${ticket.endDate}`);
+    await post(`Scheduled ${tickets.length} ${tickets.length === 1 ? 'item' : 'items'}:\n${lines.join('\n')}\n[View the Gantt chart](${process.env.GANTT_URL || 'https://my-gantt.pages.dev/'})`);
   } catch (error) {
     console.error('Gandalf failed:', error instanceof Error ? error.message : error);
     try { if (token) await post('I couldn’t process that request. Please try again or contact the app administrator.'); } catch (postError) { console.error('Gandalf could not reply:', postError); }

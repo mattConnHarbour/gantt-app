@@ -38,7 +38,7 @@ test('sends grounded updates only to the owner and respects cooldown and unchang
     assert.equal(modelInput.snapshots.granola.notes[0].summary, 'Prepare the demo');
     assert.equal(modelInput.snapshots['slack:Acme'].matches[0].text, 'Demo ready');
     assert.equal(modelInput.snapshots.linear.issues[0].identifier, 'IT-1');
-    assert.equal((await getConversation('DOWNER'))[0].reply, sent[0].text);
+    assert.equal((await getConversation('DOWNER'))[0].reply, sent[0].markdown_text);
     time += 60000;
     await storage.updateTicket('custom-test', { title: 'Demo follow-up' });
     await watcher.tick();

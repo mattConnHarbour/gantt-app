@@ -6,6 +6,7 @@ import * as storage from './storage.js';
 import { getConversation, saveTurn } from './conversation.js';
 import { searchPylon, searchSlack } from './search.js';
 import { GANDALF_PERSONALITY } from './personality.js';
+import { safeMarkdown } from './slack-format.js';
 
 type Snapshot = { data: unknown; hash: string; observedAt: number };
 type WatchState = { evaluatedHashes: Record<string, string>; lastEvaluatedAt: number; lastSentAt: number; recentMessages: string[]; sentFingerprints: string[] };
@@ -13,7 +14,6 @@ const dataDir = process.env.GANTT_DATA_DIR || join(dirname(fileURLToPath(import.
 const statePath = join(dataDir, 'gandalf-proactive.json');
 const emptyState = (): WatchState => ({ evaluatedHashes: {}, lastEvaluatedAt: 0, lastSentAt: 0, recentMessages: [], sentFingerprints: [] });
 const hash = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
-const slackEscape = (text: string) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 async function loadState(): Promise<WatchState> {
   try { return { ...emptyState(), ...JSON.parse(await readFile(statePath, 'utf8')) }; }
@@ -148,10 +148,10 @@ export function createProactiveWatcher(options: { now?: () => number; intervalMs
       const insight = JSON.parse(text);
       if (typeof insight.notify !== 'boolean' || typeof insight.message !== 'string') throw new Error('OpenAI insight invalid');
       if (insight.notify && insight.message.trim()) {
-        const body = slackEscape(insight.message.trim().slice(0, 3500));
+        const body = safeMarkdown(insight.message.trim().slice(0, 11000)).slice(0, 12000);
         const fingerprint = hash(body.toLowerCase().replace(/\s+/g, ' '));
         if (!state.sentFingerprints.includes(fingerprint)) {
-          const sent = await slackCall('chat.postMessage', process.env.SLACK_BOT_TOKEN!, { channel, text: body, client_msg_id: `${fingerprint.slice(0,8)}-${fingerprint.slice(8,12)}-4${fingerprint.slice(13,16)}-a${fingerprint.slice(17,20)}-${fingerprint.slice(20,32)}` });
+          const sent = await slackCall('chat.postMessage', process.env.SLACK_BOT_TOKEN!, { channel, markdown_text: body, client_msg_id: `${fingerprint.slice(0,8)}-${fingerprint.slice(8,12)}-4${fingerprint.slice(13,16)}-a${fingerprint.slice(17,20)}-${fingerprint.slice(20,32)}` });
           if (sent.channel !== channel) throw new Error('Slack returned an unexpected destination');
           state.lastSentAt = time;
           state.sentFingerprints = [...state.sentFingerprints, fingerprint].slice(-50);
