@@ -119,11 +119,12 @@ test('signed Slack events create one task and reject forged requests', async () 
       if (String(url).includes('openai.com')) {
         const request = JSON.parse(String(init?.body));
         if (request.text.format.name === 'reasoning_route') return Response.json({status:'completed', output:[{content:[{type:'output_text',text:'{\"tier\":\"low\"}'}]}]});
-        assert.equal(request.reasoning.effort, 'low');
-        assert.equal(request.model, 'low-test-model');
+        if (request.text.format.name === 'progress_update') return Response.json({status:'completed', output:[{content:[{type:'output_text',text:JSON.stringify({message:'I’ll review the request.'})}]}]});
+        assert.equal(request.reasoning.effort, modelCalls === 0 ? 'low' : 'high');
+        if (modelCalls === 0) assert.equal(request.model, 'low-test-model');
         const payload = JSON.parse(request.input);
         modelCalls++;
-        const plan = modelCalls === 1
+        const plan = modelCalls <= 2
           ? { action: 'search', reply: '', slackQuery: 'Acme demo', granolaQuery: null, tasks: [] }
           : { action: 'reply', reply: `Found: ${payload.searchResults.slack.matches[0].text}`, slackQuery: null, granolaQuery: null, tasks: [] };
         return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(plan) }] }] });
@@ -135,7 +136,7 @@ test('signed Slack events create one task and reject forged requests', async () 
     const searchSignature = `v0=${createHmac('sha256', 'test-secret').update(`v0:${timestamp}:${searchEvent}`).digest('hex')}`;
     await app.inject({ method: 'POST', url: '/api/slack/events', headers: { 'content-type': 'application/json', 'x-slack-request-timestamp': timestamp, 'x-slack-signature': searchSignature }, payload: searchEvent });
     for (let i = 0; i < 100 && posts.length < 4; i++) await new Promise(resolve => setTimeout(resolve, 10));
-    assert.equal(modelCalls, 2);
+    assert.equal(modelCalls, 3);
     assert.match(posts[3].markdown_text, /Acme demo is ready/);
     assert.equal((await storage.getAllTickets()).length, 2);
     const multiEvent = { type: 'message', channel_type: 'im', user: 'U1', channel: 'D2', ts: '1794931700.000001', text: 'Schedule the two Acme tasks' };

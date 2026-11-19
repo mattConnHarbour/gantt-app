@@ -14,7 +14,7 @@ export async function searchSlack(query: string, user: string): Promise<unknown>
     const response = await fetch(`https://slack.com/api/search.messages?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
     const data = await response.json() as any;
     if (!response.ok || !data.ok) return { error: `Slack search failed: ${data.error || response.status}` };
-    return { matches: (data.messages?.matches || []).slice(0, 10).map((m: any) => ({ text: String(m.text || '').slice(0, 5000), permalink: m.permalink, channel: m.channel?.name, ts: m.ts })), total: data.messages?.total, limited: true };
+    return { matches: (data.messages?.matches || []).slice(0, 10).map((m: any) => ({ text: String(m.text || '').slice(0, 5000), permalink: m.permalink, user: m.user, channel: m.channel?.name, channelId: m.channel?.id, ts: m.ts, threadTs: m.thread_ts })), total: data.messages?.total, limited: true, coverage: 'Up to 10 matching messages; surrounding thread and referenced documents are not automatically retrieved.' };
   } catch { return { error: 'Slack search is temporarily unavailable.' }; }
 }
 

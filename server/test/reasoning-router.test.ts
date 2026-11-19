@@ -20,6 +20,7 @@ test('routes a request with context, and falls back to high when the router fail
     assert.deepEqual(low, { tier: 'low', model: 'low-model', effort: 'low' });
     assert.equal(JSON.parse(received.input).recentTurns[0].prompt, prior[0].prompt);
     assert.equal(received.text.format.name, 'reasoning_route');
+    assert.equal((await chooseReasoning([], prior, 'I think you are wrong about this')).tier, 'high');
     tier = 'high';
     assert.deepEqual(await chooseReasoning([], prior, 'Compare the tradeoffs'), { tier: 'high', model: 'high-model', effort: 'high' });
     tier = 'unknown';
