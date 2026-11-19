@@ -1,6 +1,6 @@
 # Gandalf Slack bot
 
-Gandalf answers questions, reads the current Gantt chart, and adds one or more custom tasks to the same backend as the chart. Gandalf can schedule up to 25 items in one request; if any item needs details, it asks before creating the batch. Send Gandalf a direct message, or mention Gandalf in a channel or in a thread, for example:
+Gandalf is a wise, warm, lightly playful wizard who occasionally speaks of spells and potions while keeping facts and task details clear. He answers questions, reads the current Gantt chart, and adds one or more custom tasks to the same backend as the chart. Gandalf can schedule up to 25 items in one request; if any item needs details, it asks before creating the batch. Send Gandalf a direct message, or mention Gandalf in a channel or in a thread, for example:
 
 > @Gandalf Schedule the Acme export fix from December 1 to December 3.
 
