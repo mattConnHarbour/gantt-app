@@ -26,6 +26,8 @@ Each Slack search is bounded to 10 matching messages and includes source links; 
 
 Pylon keyword search checks issue titles and initial bodies and returns at most 10 issues; it does not search complete conversations. An exact issue number retrieves issue details and up to the first 50 messages, including internal notes, and reports when more messages remain. Gandalf does not update Pylon or send Pylon replies.
 
+For read-only Orbit code inspection, set `ORBIT_GITHUB_TOKEN` to a fine-grained GitHub token restricted to `superdoc/orbit` with repository Contents read permission. Orbit access is limited to the configured owner's DM. Each inspection resolves the latest `main` commit and reads files at that immutable revision; it does not read local uncommitted changes, execute code, or create a working checkout. GitHub code-search indexing may lag, so search coverage is not exhaustive; explicit file reads use the resolved commit. Private code sent in context is processed by the configured OpenAI API.
+
 ## Proactive guidance
 
 Set `GANDALF_PROACTIVE_ENABLED=true` and `GANDALF_PROACTIVE_DM_CHANNEL` to the owner's verified Gandalf DM. The watcher checks the chart, a bounded set of recent Granola notes, and one chart customer in Slack every 10 seconds; it rotates through up to 12 customers. It checks the first 25 active issues assigned to the Linear token owner and rotates through up to 12 chart-linked Pylon issues every two minutes when configured. Search results and note coverage are bounded, Pylon requires its token, and source errors and timestamps are included with the evidence.
