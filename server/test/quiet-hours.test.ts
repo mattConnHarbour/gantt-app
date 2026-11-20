@@ -7,6 +7,7 @@ import { join } from 'node:path';
 process.env.GANTT_DATA_DIR = await mkdtemp(join(tmpdir(), 'gandalf-quiet-test-'));
 Object.assign(process.env, { GANDALF_SEARCH_OWNER: 'UOWNER', GANDALF_PROACTIVE_DM_CHANNEL: 'DOWNER', GANDALF_TIMEZONE: 'America/New_York', SLACK_TEAM_ID: 'T1', SLACK_SEARCH_TOKEN: 'test-user', SLACK_BOT_TOKEN: 'test-bot', OPENAI_API_KEY: 'test-openai' });
 const { createProactiveWatcher, isQuietHours } = await import('../src/services/proactive.js');
+const storage = await import('../src/services/storage.js');
 
 test('quiet hours follow local time in winter and summer', () => {
   for (const value of ['2026-11-20T03:00:00Z', '2026-11-20T10:59:59Z', '2026-07-01T02:00:00Z', '2026-07-01T09:59:59Z']) assert.equal(isQuietHours(Date.parse(value)), true, value);
@@ -33,6 +34,9 @@ test('suppresses messages during quiet hours, including a response finishing at 
   const watcher = createProactiveWatcher({ now: () => time, minAnalysisMs: 1000, minMessageMs: 30 * 60000 });
   try {
     await watcher.tick();
+    assert.equal(generated, 0, 'initial sources establish a baseline');
+    await storage.createTicket({ id: 'quiet-test', title: 'New task', customer: '', startDate: '2026-11-19', endDate: '2026-11-20' });
+    await watcher.tick();
     assert.equal(generated, 1);
     assert.equal(sent.length, 0, 'a response finishing at 10 p.m. is suppressed');
     time = Date.parse('2026-11-20T10:59:59Z');
@@ -45,6 +49,7 @@ test('suppresses messages during quiet hours, including a response finishing at 
     await watcher.tick();
     assert.equal(sent.length, 1, 'the 30-minute cooldown is respected');
     time += 60000;
+    await storage.updateTicket('quiet-test', { title: 'Updated task' });
     await watcher.tick();
     assert.equal(sent.length, 2, 'the next check-in can be sent after 30 minutes');
   } finally { watcher.stop(); globalThis.fetch = original; await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
