@@ -10,7 +10,7 @@ const { createProactiveWatcher } = await import('../src/services/proactive.js');
 const storage = await import('../src/services/storage.js');
 const { getConversation } = await import('../src/services/conversation.js');
 
-test('sends grounded updates only to the owner and respects cooldown and unchanged data', async () => {
+test('sends grounded updates and periodic check-ins only to the owner, respecting cooldown', async () => {
   let time = Date.parse('2026-11-19T16:00:00Z');
   let generated = 0;
   const sent: any[] = [];
@@ -24,7 +24,7 @@ test('sends grounded updates only to the owner and respects cooldown and unchang
     if (u.includes('public-api.granola.ai/v1/notes/')) return Response.json({ id: 'not_test', title: 'Acme', summary_text: 'Prepare the demo', web_url: 'https://example.com/note' });
     if (u.includes('public-api.granola.ai/v1/notes')) return Response.json({ notes: [{ id: 'not_test', title: 'Acme' }], hasMore: false });
     if (u.includes('api.linear.app')) return Response.json({ data: { viewer: { assignedIssues: { nodes: [{ identifier: 'IT-1', title: 'Demo', url: 'https://example.com/issue' }], pageInfo: { hasNextPage: false } } } } });
-    if (u.includes('openai.com')) { generated++; modelInput = JSON.parse(JSON.parse(String(options?.body)).input); return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify({ notify: true, message: generated === 1 ? 'Prepare the Acme demo.' : 'Check the Acme follow-up.' }) }] }] }); }
+    if (u.includes('openai.com')) { generated++; modelInput = JSON.parse(JSON.parse(String(options?.body)).input); const insight = generated === 3 ? { notify: false, message: '' } : { notify: true, message: generated === 1 ? 'Prepare the Acme demo.' : 'Check the Acme follow-up.' }; return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(insight) }] }] }); }
     if (u.includes('chat.postMessage')) { const body = JSON.parse(String(options?.body)); sent.push(body); return Response.json({ ok: true, channel: body.channel, ts: '1795104000.000001' }); }
     throw new Error(`Unexpected URL ${u}`);
   }) as typeof fetch;
@@ -54,11 +54,16 @@ test('sends grounded updates only to the owner and respects cooldown and unchang
     time += 3600000;
     const restarted = createProactiveWatcher({ now: () => time, minAnalysisMs: 1000, minMessageMs: 3600000 });
     await restarted.tick();
-    assert.equal(sent.length, 2, 'restart preserves deduplication state');
+    assert.equal(sent.length, 3, 'unchanged evidence receives a periodic check-in after restart');
+    assert.match(sent[2].markdown_text, /Demo follow-up/);
+    assert.equal(modelInput.changedSources.length, 0);
+    assert.equal((await getConversation('DOWNER')).at(-1)?.reply, sent[2].markdown_text);
+    await restarted.tick();
+    assert.equal(sent.length, 3, 'check-in respects the persisted cooldown');
     restarted.stop();
     process.env.GANDALF_SEARCH_OWNER = 'UOTHER';
     const invalid = createProactiveWatcher({ now: () => time });
     await invalid.tick();
-    assert.equal(sent.length, 2, 'mismatched owner receives no message');
+    assert.equal(sent.length, 3, 'mismatched owner receives no message');
   } finally { globalThis.fetch = originalFetch; await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
