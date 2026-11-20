@@ -15,6 +15,12 @@ const statePath = join(dataDir, 'gandalf-proactive.json');
 const emptyState = (): WatchState => ({ evaluatedHashes: {}, lastEvaluatedAt: 0, lastSentAt: 0, recentMessages: [], sentFingerprints: [] });
 const hash = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 
+/** Quiet hours follow the owner's local clock, including daylight saving time. */
+export function isQuietHours(time: number, timezone = process.env.GANDALF_TIMEZONE || 'America/New_York'): boolean {
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: timezone, hour: 'numeric', hourCycle: 'h23' }).format(new Date(time)));
+  return hour >= 22 || hour < 6;
+}
+
 async function loadState(): Promise<WatchState> {
   try { return { ...emptyState(), ...JSON.parse(await readFile(statePath, 'utf8')) }; }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return emptyState(); throw error; }
@@ -128,7 +134,7 @@ export function createProactiveWatcher(options: { now?: () => number; intervalMs
         } else snapshot('pylon', { unavailable: process.env.PYLON_API_TOKEN ? 'No chart item has a Pylon issue ID' : 'Pylon is not configured' });
       }
       const changed = [...snapshots.entries()].filter(([key, value]) => state!.evaluatedHashes[key] !== value.hash).map(([key]) => key);
-      if (time - state.lastEvaluatedAt < minAnalysisMs || (state.lastSentAt && time - state.lastSentAt < minMessageMs)) return;
+      if (isQuietHours(now()) || time - state.lastEvaluatedAt < minAnalysisMs || (state.lastSentAt && time - state.lastSentAt < minMessageMs)) return;
       state.lastEvaluatedAt = time;
       await saveState(state);
       const history = await getConversation(channel);
@@ -167,9 +173,11 @@ export function createProactiveWatcher(options: { now?: () => number; intervalMs
         fallback = true;
       }
       if (!state.sentFingerprints.includes(fingerprint)) {
+          // A request started before 10 p.m. may finish after quiet hours begin.
+          if (isQuietHours(now())) return;
           const sent = await slackCall('chat.postMessage', process.env.SLACK_BOT_TOKEN!, { channel, markdown_text: body, client_msg_id: `${fingerprint.slice(0,8)}-${fingerprint.slice(8,12)}-4${fingerprint.slice(13,16)}-a${fingerprint.slice(17,20)}-${fingerprint.slice(20,32)}` });
           if (sent.channel !== channel) throw new Error('Slack returned an unexpected destination');
-          state.lastSentAt = time;
+          state.lastSentAt = now();
           state.sentFingerprints = [...state.sentFingerprints, fingerprint].slice(-50);
           state.recentMessages = [...state.recentMessages, body].slice(-20);
           await saveTurn(channel, { eventId: `proactive-${fingerprint}`, user: '', prompt: fallback ? '[Proactive check-in]' : '[Proactive update]', reply: body, ts: sent.ts || String(time / 1000) });
