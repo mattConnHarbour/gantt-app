@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 process.env.GANTT_DATA_DIR = await mkdtemp(join(tmpdir(), 'gandalf-orbit-'));
-Object.assign(process.env, { OPENAI_API_KEY: 'test-openai', SLACK_BOT_TOKEN: 'test-slack', ORBIT_GITHUB_TOKEN: 'private-test-token', GANDALF_SEARCH_OWNER: 'UOWNER' });
+Object.assign(process.env, { OPENAI_API_KEY: 'test-openai', SLACK_BOT_TOKEN: 'test-slack', GANDALF_SEARCH_OWNER: 'UOWNER' });
 const { handleMention } = await import('../src/services/gandalf.js');
 
-test('Orbit is available only in the owner DM, and its pinned evidence reaches the model', async () => {
+test('Public code inspection is available only in the owner DM and its pinned evidence reaches the model', async () => {
   const original = globalThis.fetch;
   let githubCalls = 0;
   let sent: string[] = [];
@@ -20,7 +20,6 @@ test('Orbit is available only in the owner DM, and its pinned evidence reaches t
     if (u.includes('conversations.history')) return Response.json({ ok: true, messages: [] });
     if (u.includes('openai.com')) {
       const body = JSON.parse(String(options?.body));
-      assert.ok(!JSON.stringify(body).includes('private-test-token'));
       if (body.text.format.name === 'reasoning_route') return response({ tier: 'high' });
       if (body.text.format.name === 'progress_update') return response({ message: 'I’ll inspect the code.' });
       const input = JSON.parse(body.input);
