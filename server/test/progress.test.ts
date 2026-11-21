@@ -59,13 +59,13 @@ test('high reasoning provides safe progress updates and a formatted final answer
   }) as typeof fetch;
   try {
     await handleMention('EvProgress', { type: 'message', channel_type: 'im', user: 'U1', channel: 'D1', ts: '1794931600.000001', text: 'Analyze Acme and search Slack' });
-    assert.deepEqual(calls.map(call => call.method), ['chat.postMessage', 'chat.update', 'chat.update', 'chat.postMessage', 'chat.update']);
+    assert.deepEqual(calls.map(call => call.method), ['chat.postMessage', 'chat.update', 'chat.update', 'chat.update']);
     assert.match(calls[0].body.markdown_text, /review/);
     assert.match(calls[1].body.markdown_text, /checking Slack/);
     assert.match(calls[2].body.markdown_text, /checking Granola/);
     assert.equal(calls[3].body.markdown_text, '## Summary\n**Ready** — [source](https://example.com/source)');
     assert.equal(calls[3].body.text, undefined);
-    assert.match(calls[4].body.markdown_text, /Finished/);
+    assert.equal(calls[3].body.ts, '123.456');
     assert.equal(safeMarkdown('**Important** <@U1> & <!channel>'), '**Important** &lt;@U1&gt; &amp; &lt;!channel&gt;');
   } finally {
     globalThis.fetch = originalFetch;
