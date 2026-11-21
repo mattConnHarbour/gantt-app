@@ -28,6 +28,8 @@ Pylon keyword search checks issue titles and initial bodies and returns at most 
 
 For read-only code inspection, Gandalf searches the public `superdoc/docx-editor` GitHub repository without a token, restricted to the configured owner's DM. Each inspection resolves the latest `main` commit and reads a public source archive or file at that immutable revision; it does not access private Orbit or local uncommitted changes, execute code, or create a working checkout. Search is bounded to 10,000 text files and 8 matching files; file and archive size limits apply. GitHub's unauthenticated API has rate limits. Code sent in context is processed by the configured OpenAI API.
 
+The codebase contains an unconnected alert-verification helper for future `#int-demo-gallery` CI monitoring. It validates the exact `superdoc/demos` run and attempt against GitHub before any action. No autonomous CI fixing, channel monitoring, posting, pushing, or merging is enabled by this helper.
+
 ## Proactive guidance
 
 Set `GANDALF_PROACTIVE_ENABLED=true` and `GANDALF_PROACTIVE_DM_CHANNEL` to the owner's verified Gandalf DM. The watcher checks the chart, a bounded set of recent Granola notes, and one chart customer in Slack every 10 seconds; it rotates through up to 12 customers. It checks the first 25 active issues assigned to the Linear token owner and rotates through up to 12 chart-linked Pylon issues every two minutes when configured. Search results and note coverage are bounded, Pylon requires its token, and source errors and timestamps are included with the evidence.
