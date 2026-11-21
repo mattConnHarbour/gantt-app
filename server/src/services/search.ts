@@ -1,4 +1,4 @@
-/** Personal search credentials are only used in their owner's direct conversation. */
+/** Pylon and repository access are restricted to the owner's direct conversation. */
 export function canSearch(channelType: string | undefined, user: string | undefined): boolean {
   return channelType === 'im' && !!user && !!process.env.GANDALF_SEARCH_OWNER && user === process.env.GANDALF_SEARCH_OWNER;
 }

@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { handleMention, verifySlackSignature } from '../services/gandalf.js';
+import { getConversation } from '../services/conversation.js';
+import { channelRelevant } from '../services/channel-relevance.js';
 
 export async function slackRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.addContentTypeParser('application/json', { parseAs: 'string' }, (_request, body, done) => done(null, body));
@@ -15,14 +17,23 @@ export async function slackRoutes(fastify: FastifyInstance): Promise<void> {
     const event = payload.event;
     const isMention = event?.type === 'app_mention';
     const isDirectMessage = event?.type === 'message' && event.channel_type === 'im' && !event.subtype;
-    if (payload.type !== 'event_callback' || (!isMention && !isDirectMessage) || event.bot_id || !event.user || typeof event.channel !== 'string' || typeof event.ts !== 'string' || typeof event.text !== 'string' || typeof payload.event_id !== 'string') return reply.code(200).send();
+    const isChannelMessage = process.env.GANDALF_CHANNEL_REPLIES === 'true' && event?.type === 'message' && ['channel', 'group'].includes(event.channel_type) && !event.subtype;
+    if (payload.type !== 'event_callback' || (!isMention && !isDirectMessage && !isChannelMessage) || event.bot_id || !event.user || typeof event.channel !== 'string' || typeof event.ts !== 'string' || typeof event.text !== 'string' || typeof payload.event_id !== 'string') return reply.code(200).send();
     if (process.env.SLACK_TEAM_ID && payload.team_id !== process.env.SLACK_TEAM_ID) return reply.code(403).send();
     const now = Date.now();
     for (const [id, seen] of processing) if (now - seen > 3600000) processing.delete(id);
-    if (!processing.has(payload.event_id)) {
-      processing.set(payload.event_id, now);
+    const dedupKey = isMention || isChannelMessage ? `channel:${event.channel}:${event.ts}` : payload.event_id;
+    if (!processing.has(dedupKey)) {
+      processing.set(dedupKey, now);
       const previous = channelQueues.get(event.channel) || Promise.resolve();
-      const next = previous.then(() => handleMention(payload.event_id, event));
+      const next = previous.then(async () => {
+        if (isChannelMessage) {
+          const mentioned = !!process.env.SLACK_BOT_USER_ID && event.text.includes(`<@${process.env.SLACK_BOT_USER_ID}>`);
+          const named = mentioned || /\bgandalf\b/i.test(event.text);
+          if (!named && !await channelRelevant(event.text, await getConversation(event.channel))) return;
+          await handleMention(payload.event_id, event, { allowSchedule: named });
+        } else await handleMention(payload.event_id, event);
+      }).catch(() => { console.error('Gandalf could not process a Slack channel event'); });
       channelQueues.set(event.channel, next);
       void next.finally(() => { if (channelQueues.get(event.channel) === next) channelQueues.delete(event.channel); });
     }
