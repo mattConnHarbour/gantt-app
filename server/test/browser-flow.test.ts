@@ -9,7 +9,7 @@ const { handleMention } = await import('../src/services/gandalf.js');
 const { browse } = await import('../src/services/browser.js');
 
 test('uses isolated browser sessions and supplies screenshots as vision input', async () => {
-  const original = globalThis.fetch; const actions: any[] = []; const posts: any[] = []; let modelCalls = 0;
+  const original = globalThis.fetch; const actions: any[] = []; const posts: any[] = []; let modelCalls = 0; let bilboCalls = 0;
   const response = (value: unknown) => Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(value) }] }] });
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     const endpoint = String(url);
@@ -20,6 +20,18 @@ test('uses isolated browser sessions and supplies screenshots as vision input', 
       const request = JSON.parse(String(init?.body));
       if (request.text.format.name === 'reasoning_route') return response({ tier: 'high' });
       if (request.text.format.name === 'progress_update') return response({ message: 'I’ll inspect the page.' });
+      if (request.text.format.name === 'bilbo_review') {
+        bilboCalls++;
+        const evidence = JSON.parse(request.input);
+        assert.ok(evidence.browserEvidence.length >= 2);
+        if (bilboCalls === 2) assert.equal(evidence.gandalfDraft, 'The page has a Next button.');
+        return response({ review: 'The Next button is visible; verify what it does.' });
+      }
+      if (request.text.format.name === 'thorin_plan') {
+        const input = typeof request.input === 'string' ? JSON.parse(request.input) : JSON.parse(request.input[0].content[0].text);
+        if (input.observations.length === 1) return response({ action: 'click', ref: 'e0', value: null, assessment: 'Try Next.' });
+        return response({ action: 'done', ref: null, value: null, assessment: 'Next worked.' });
+      }
       assert.match(request.instructions, /Demo Impact Scorecard/);
       assert.match(request.instructions, /Relevance/);
       assert.match(request.instructions, /Clarity/);
@@ -30,6 +42,13 @@ test('uses isolated browser sessions and supplies screenshots as vision input', 
       assert.ok(request.text.format.schema.properties.browser.anyOf[0].properties.action.enum.includes('reload'));
       modelCalls++;
       if (modelCalls === 1) return response({ action: 'browse', browser: { action: 'open', url: 'https://example.com', ref: null, value: null }, tasks: [] });
+      if (typeof request.input === 'string') {
+        const reviews = JSON.parse(request.input).searchResults;
+        assert.match(reviews.bilboReview, /verify/);
+        assert.equal(reviews.thorin.completed, true);
+        assert.match(reviews.thorin.assessment, /Next worked/);
+        return response({ action: 'reply', reply: 'The page has a Next button. Bilbo recommends checking its behavior; Thorin tried it.', tasks: [] });
+      }
       assert.equal(request.input[0].content[1].type, 'input_image');
       const evidence = JSON.parse(request.input[0].content[0].text);
       assert.equal(evidence.searchResults.browser.title, 'Example');
@@ -42,13 +61,15 @@ test('uses isolated browser sessions and supplies screenshots as vision input', 
   }) as typeof fetch;
   try {
     await handleMention('EvBrowser', { type: 'message', channel_type: 'im', channel: 'D1', user: 'U1', ts: '1794931600.000001', text: 'Open example.com and click Next' });
-    assert.deepEqual(actions.map(a => a.action), ['open', 'reload', 'click']);
+    assert.deepEqual(actions.map(a => a.action), ['open', 'reload', 'click', 'open', 'click']);
     assert.equal(actions[0].session, actions[1].session);
-    assert.equal(posts.at(-1).markdown_text, 'The page has a Next button.');
+    assert.notEqual(actions[0].session, actions[3].session, 'Thorin has a separate browser session');
+    assert.equal(bilboCalls, 2);
+    assert.match(posts.at(-1).markdown_text, /Bilbo recommends/);
     await browse('D2', 'U1', { action: 'open', url: 'https://example.com', ref: null, value: null });
-    assert.notEqual(actions[0].session, actions[3].session, 'sessions are isolated by conversation');
+    assert.notEqual(actions[0].session, actions[5].session, 'sessions are isolated by conversation');
     await browse('D1', 'U2', { action: 'open', url: 'https://example.com', ref: null, value: null });
-    assert.notEqual(actions[0].session, actions[4].session, 'sessions are isolated by user');
+    assert.notEqual(actions[0].session, actions[6].session, 'sessions are isolated by user');
   } finally { globalThis.fetch = original; await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
 
