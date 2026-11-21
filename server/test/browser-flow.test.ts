@@ -20,6 +20,10 @@ test('uses isolated browser sessions and supplies screenshots as vision input', 
       const request = JSON.parse(String(init?.body));
       if (request.text.format.name === 'reasoning_route') return response({ tier: 'high' });
       if (request.text.format.name === 'progress_update') return response({ message: 'I’ll inspect the page.' });
+      assert.match(request.instructions, /Demo Impact Scorecard/);
+      assert.match(request.instructions, /Relevance/);
+      assert.match(request.instructions, /Clarity/);
+      assert.match(request.instructions, /Differentiation/);
       modelCalls++;
       if (modelCalls === 1) return response({ action: 'browse', browser: { action: 'open', url: 'https://example.com', ref: null, value: null }, tasks: [] });
       assert.equal(request.input[0].content[1].type, 'input_image');
@@ -40,5 +44,30 @@ test('uses isolated browser sessions and supplies screenshots as vision input', 
     assert.notEqual(actions[0].session, actions[2].session, 'sessions are isolated by conversation');
     await browse('D1', 'U2', { action: 'open', url: 'https://example.com', ref: null, value: null });
     assert.notEqual(actions[0].session, actions[3].session, 'sessions are isolated by user');
+  } finally { globalThis.fetch = original; await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
+});
+
+test('a demo is not scored when Gandalf only opens it without interacting', async () => {
+  const original = globalThis.fetch; const posts: string[] = []; let modelCalls = 0;
+  const response = (value: unknown) => Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(value) }] }] });
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    const endpoint = String(url);
+    if (endpoint.includes('conversations.history')) return Response.json({ ok: true, messages: [] });
+    if (endpoint.includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body)).markdown_text); return Response.json({ ok: true }); }
+    if (endpoint.includes('browser.internal')) return Response.json({ url: 'https://example.com/', title: 'Example', text: 'Example page', elements: [] });
+    if (endpoint.includes('openai.com')) {
+      const request = JSON.parse(String(init?.body));
+      if (request.text.format.name === 'reasoning_route') return response({ tier: 'high' });
+      if (request.text.format.name === 'progress_update') return response({ message: 'I’ll inspect the demo.' });
+      modelCalls++;
+      if (modelCalls === 1) return response({ action: 'browse', browser: { action: 'open', url: 'https://example.com', ref: null, value: null }, tasks: [] });
+      return response({ action: 'reply', reply: 'Relevance 5/5, Clarity 5/5, Differentiation 5/5.', tasks: [] });
+    }
+    throw new Error('Unexpected request');
+  }) as typeof fetch;
+  try {
+    await handleMention('EvNoInteraction', { type: 'message', channel_type: 'im', channel: 'D1', user: 'U1', ts: '1794931700.000001', text: 'Test this demo: https://example.com' });
+    assert.match(posts.at(-1)!, /couldn’t complete an interaction/);
+    assert.doesNotMatch(posts.at(-1)!, /5\/5/);
   } finally { globalThis.fetch = original; await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
