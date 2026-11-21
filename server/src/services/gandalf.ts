@@ -26,8 +26,9 @@ export function verifySlackSignature(raw: string, timestamp: string, signature: 
 }
 
 async function slack(method: string, params: Record<string, string>, token: string): Promise<any> {
+  const historyMethod = method === 'conversations.replies' || method === 'conversations.history';
   const res = await fetch(`https://slack.com/api/${method}`, {
-    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(params), signal: AbortSignal.timeout(15000),
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': historyMethod ? 'application/x-www-form-urlencoded' : 'application/json; charset=utf-8' }, body: historyMethod ? new URLSearchParams(params).toString() : JSON.stringify(params), signal: AbortSignal.timeout(15000),
   });
   const data = await res.json() as any;
   if (!res.ok || !data.ok) throw new Error(`Slack ${method}: ${data.error || res.status}`);

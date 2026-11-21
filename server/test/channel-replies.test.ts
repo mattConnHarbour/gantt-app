@@ -17,6 +17,12 @@ test('channel responses require relevance, deduplicate mentions, and protect unr
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     const u = String(url);
     if (u.includes('conversations.history')) return Response.json({ ok: true, messages: [] });
+    if (u.includes('conversations.replies')) {
+      assert.equal((init?.headers as Record<string, string>)['Content-Type'], 'application/x-www-form-urlencoded');
+      const params = new URLSearchParams(String(init?.body));
+      assert.equal(params.get('channel'), 'C1'); assert.equal(params.get('ts'), '1794931800.000001');
+      return Response.json({ ok: true, messages: [{ ts: '1794931800.000001', user: 'UOTHER', text: 'Original question' }, { ts: '1794931801.000001', user: 'UOTHER', text: 'Gandalf, hello' }] });
+    }
     if (u.includes('auth.test')) return Response.json({ ok: true, user_id: 'UOWNER', team_id: 'T1' });
     if (u.includes('search.messages')) return Response.json({ ok: true, messages: { matches: [{ text: 'Customer update', permalink: 'https://example.com/message' }], total: 1 } });
     if (u.includes('granola.ai')) return Response.json({ notes: [{ title: 'Customer meeting' }], hasMore: false });
@@ -64,5 +70,7 @@ test('channel responses require relevance, deduplicate mentions, and protect unr
     await inject('other-dm', { ...base, channel_type: 'im', channel: 'DOTHER', ts: '1794931650.000001', text: 'Please search for Customer' }); await waitFor(7);
     assert.equal(posts.at(-1).markdown_text, 'Found the update.'); assert.equal(posts.at(-1).channel, 'DOTHER');
     await inject('bot-event', { ...base, ts: '1794931700.000001', bot_id: 'B1', text: 'Gandalf hello' }); await new Promise(resolve => setTimeout(resolve, 30)); assert.equal(posts.length, 7);
+    await inject('thread-reply', { ...base, ts: '1794931801.000001', thread_ts: '1794931800.000001', text: 'Gandalf, hello' }); await waitFor(8);
+    assert.equal(posts.at(-1).markdown_text, 'Hello.'); assert.equal(posts.at(-1).thread_ts, '1794931800.000001');
   } finally { globalThis.fetch = original; await app.close(); await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
