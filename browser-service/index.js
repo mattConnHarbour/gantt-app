@@ -38,7 +38,6 @@ app.post('/act', async (request, reply) => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: false, proxy: { server: `http://127.0.0.1:${proxyPort}` }, serviceWorkers: 'block' });
     await context.addInitScript(() => { Object.defineProperty(globalThis, 'RTCPeerConnection', { value: undefined }); Object.defineProperty(globalThis, 'webkitRTCPeerConnection', { value: undefined }); });
     await context.route('**/*', async route => { if (!safeUrl(route.request().url())) return route.abort(); return route.continue(); });
-    await context.routeWebSocket('**/*', socket => socket.close());
     const page = await context.newPage();
     entry = { context, page, updated: Date.now(), running: false };
     sessions.set(session, entry);

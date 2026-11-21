@@ -24,6 +24,9 @@ test('uses isolated browser sessions and supplies screenshots as vision input', 
       assert.match(request.instructions, /Relevance/);
       assert.match(request.instructions, /Clarity/);
       assert.match(request.instructions, /Differentiation/);
+      assert.match(request.instructions, /task-specific testing script/);
+      assert.match(request.instructions, /several distinct passes/);
+      assert.match(request.instructions, /untested steps/);
       modelCalls++;
       if (modelCalls === 1) return response({ action: 'browse', browser: { action: 'open', url: 'https://example.com', ref: null, value: null }, tasks: [] });
       assert.equal(request.input[0].content[1].type, 'input_image');

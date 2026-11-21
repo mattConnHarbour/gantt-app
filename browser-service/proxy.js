@@ -37,7 +37,7 @@ export function createPublicProxy() {
       if (target.username || target.password || target.pathname !== '/' || target.search) throw new Error('Invalid target');
       const { address, family } = await resolvePublic(target.hostname.replace(/^\[|\]$/g, ''));
       const upstream = net.connect({ host: address, family, port: Number(target.port || 443) });
-      upstream.setTimeout(30000, () => upstream.destroy());
+      upstream.setTimeout(15 * 60000, () => upstream.destroy());
       upstream.once('connect', () => { client.write('HTTP/1.1 200 Connection Established\r\n\r\n'); if (head.length) upstream.write(head); client.pipe(upstream); upstream.pipe(client); });
       upstream.on('error', () => client.destroy());
       client.on('error', () => upstream.destroy());
