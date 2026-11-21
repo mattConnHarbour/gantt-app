@@ -24,7 +24,7 @@ app.get('/health', async () => ({ status: 'ok' }));
 app.post('/act', async (request, reply) => {
   if (!authorized(request.headers.authorization)) return reply.code(401).send({ error: 'Unauthorized' });
   const { session, action, url, ref, value } = request.body || {};
-  if (typeof session !== 'string' || !/^[a-f0-9]{64}$/.test(session) || !['open', 'snapshot', 'click', 'fill', 'press', 'scroll'].includes(action)) return reply.code(400).send({ error: 'Invalid browser action' });
+  if (typeof session !== 'string' || !/^[a-f0-9]{64}$/.test(session) || !['open', 'reload', 'snapshot', 'click', 'fill', 'press', 'scroll'].includes(action)) return reply.code(400).send({ error: 'Invalid browser action' });
   if (action === 'open' && (typeof url !== 'string' || url.length > 3000 || !safeUrl(url))) return reply.code(400).send({ error: 'Only valid public HTTP(S) URLs are supported.' });
   if (['click', 'fill', 'press'].includes(action) && (typeof ref !== 'string' || !/^e\d{1,3}$/.test(ref))) return reply.code(400).send({ error: 'Choose an element reference from the latest snapshot.' });
   if (action === 'fill' && (typeof value !== 'string' || value.length > 2000)) return reply.code(400).send({ error: 'Text is required and must be at most 2,000 characters.' });
@@ -47,6 +47,7 @@ app.post('/act', async (request, reply) => {
   try {
     let page = entry.page;
     if (action === 'open') await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
+    if (action === 'reload') await page.reload({ waitUntil: 'domcontentloaded', timeout: 25000 });
     if (action === 'click') {
       const before = new Set(entry.context.pages());
       await page.locator(`[data-gandalf-ref="${ref}"]`).first().click({ timeout: 7000 });

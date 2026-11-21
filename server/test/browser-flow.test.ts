@@ -27,26 +27,28 @@ test('uses isolated browser sessions and supplies screenshots as vision input', 
       assert.match(request.instructions, /task-specific testing script/);
       assert.match(request.instructions, /several distinct passes/);
       assert.match(request.instructions, /untested steps/);
+      assert.ok(request.text.format.schema.properties.browser.anyOf[0].properties.action.enum.includes('reload'));
       modelCalls++;
       if (modelCalls === 1) return response({ action: 'browse', browser: { action: 'open', url: 'https://example.com', ref: null, value: null }, tasks: [] });
       assert.equal(request.input[0].content[1].type, 'input_image');
       const evidence = JSON.parse(request.input[0].content[0].text);
       assert.equal(evidence.searchResults.browser.title, 'Example');
       assert.ok(!JSON.stringify(evidence).includes('YWJj'), 'screenshot is sent as an image, not text');
-      if (modelCalls === 2) return response({ action: 'browse', browser: { action: 'click', url: null, ref: 'e0', value: null }, tasks: [] });
+      if (modelCalls === 2) return response({ action: 'browse', browser: { action: 'reload', url: null, ref: null, value: null }, tasks: [] });
+      if (modelCalls === 3) return response({ action: 'browse', browser: { action: 'click', url: null, ref: 'e0', value: null }, tasks: [] });
       return response({ action: 'reply', reply: 'The page has a Next button.', tasks: [] });
     }
     throw new Error('Unexpected request');
   }) as typeof fetch;
   try {
     await handleMention('EvBrowser', { type: 'message', channel_type: 'im', channel: 'D1', user: 'U1', ts: '1794931600.000001', text: 'Open example.com and click Next' });
-    assert.deepEqual(actions.map(a => a.action), ['open', 'click']);
+    assert.deepEqual(actions.map(a => a.action), ['open', 'reload', 'click']);
     assert.equal(actions[0].session, actions[1].session);
     assert.equal(posts.at(-1).markdown_text, 'The page has a Next button.');
     await browse('D2', 'U1', { action: 'open', url: 'https://example.com', ref: null, value: null });
-    assert.notEqual(actions[0].session, actions[2].session, 'sessions are isolated by conversation');
+    assert.notEqual(actions[0].session, actions[3].session, 'sessions are isolated by conversation');
     await browse('D1', 'U2', { action: 'open', url: 'https://example.com', ref: null, value: null });
-    assert.notEqual(actions[0].session, actions[3].session, 'sessions are isolated by user');
+    assert.notEqual(actions[0].session, actions[4].session, 'sessions are isolated by user');
   } finally { globalThis.fetch = original; await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });
 
