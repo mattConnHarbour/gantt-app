@@ -9,9 +9,10 @@ type Step = { action: 'read' | 'propose' | 'stop'; paths: string[]; files: { pat
 
 /** Investigate current main CI and create a draft PR through GitHub's API only.
  * No repository code is executed in the chart service. */
-export async function proposeDemosCiFix(): Promise<Record<string, unknown>> {
+export async function proposeDemosCiFix(target?: { runId: string; attempt: number }): Promise<Record<string, unknown>> {
   const token = process.env.GANDALF_DEMOS_GITHUB_TOKEN;
   if (!token) return { error: 'The demos GitHub token is not configured.' };
+  if (target && (!/^\d+$/.test(target.runId) || !Number.isSafeInteger(target.attempt) || target.attempt < 1)) return { error: 'The CI run reference is invalid.' };
   const deadline = Date.now() + 240000;
   const timeout = (max: number) => AbortSignal.timeout(Math.max(1, Math.min(max, deadline - Date.now())));
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Gandalf-demos-ci' };
@@ -28,8 +29,10 @@ export async function proposeDemosCiFix(): Promise<Record<string, unknown>> {
       if (!Number.isSafeInteger(run.workflow_id) || seen.has(run.workflow_id)) return false;
       seen.add(run.workflow_id); return true;
     });
-    const run = recent.find((r: any) => r.status === 'completed' && r.conclusion === 'failure' && r.head_sha === main.sha && r.head_branch === 'main');
-    if (!run || !Number.isSafeInteger(run.id) || !Number.isSafeInteger(run.run_attempt)) return { error: 'No current failing main-branch workflow was found among the latest 50 runs. Older failures and non-main branches were not selected.' };
+    const run = recent.find((r: any) => r.status === 'completed' && r.conclusion === 'failure' && r.head_sha === main.sha && r.head_branch === 'main' && (!target || (String(r.id) === target.runId && r.run_attempt === target.attempt)));
+    if (!run || !Number.isSafeInteger(run.id) || !Number.isSafeInteger(run.run_attempt)) return target
+      ? { error: 'That run or attempt is no longer a current failing main-branch run; it may have been superseded or succeeded. No PR was created.', runUrl: `https://github.com/superdoc/demos/actions/runs/${target.runId}/attempts/${target.attempt}` }
+      : { error: 'No current failing main-branch workflow was found among the latest 50 runs. Older failures and non-main branches were not selected.' };
     const exact = await call(`/actions/runs/${run.id}/attempts/${run.run_attempt}`);
     if (exact.id !== run.id || exact.run_attempt !== run.run_attempt || exact.head_sha !== main.sha || exact.head_branch !== 'main' || exact.status !== 'completed' || exact.conclusion !== 'failure' || exact.repository?.full_name?.toLowerCase() !== repo) return { error: 'The selected failed run could not be independently verified.' };
     const jobs = await call(`/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`);

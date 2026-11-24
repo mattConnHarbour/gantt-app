@@ -9,6 +9,7 @@ import { createProgress } from './progress.js';
 import { searchOrbit } from './orbit.js';
 import { inspectDemos } from './demos.js';
 import { proposeDemosCiFix } from './demos-ci-fix.js';
+import { parseDemoFailure, type DemoFailure } from './demo-ci-alert.js';
 import { browse } from './browser.js';
 import { DEMO_IMPACT_SCORECARD } from './demo-scorecard.js';
 import { consultBilbo } from './bilbo.js';
@@ -44,7 +45,7 @@ async function slack(method: string, params: Record<string, string>, token: stri
 const requestsMessageCleanup = (text: string) => /\b(delete|remove|redact|edit|revise|rewrite|shorten|replace|clear|clean|tidy)\b/i.test(text);
 
 /** Trust only the owner's own messages when resolving a CI-fix follow-up. */
-function canRequestDemosCiFix(event: SlackEvent, messages: Message[]): boolean {
+function canRequestDemosCiFix(event: SlackEvent, messages: Message[], referencedAlert?: DemoFailure | null): boolean {
   if (!event.user || event.user !== process.env.GANDALF_SEARCH_OWNER || (event.channel_type !== 'im' && event.type !== 'app_mention')) return false;
   const current = event.text.replace(/<@[A-Z0-9]+>/gi, '').trim();
   const isQuestionOrRefusal = (text: string) => /^\s*(?:how|why|what|which|where|when)\b/i.test(text) || /\b(?:do not|don['’]t|never|without)\s+(?:fix|repair|resolve)\b/i.test(text);
@@ -55,7 +56,21 @@ function canRequestDemosCiFix(event: SlackEvent, messages: Message[]): boolean {
   const hasCi = (text: string) => /\b(ci|build|pipeline|tests?|actions)\b/i.test(text);
   const followup = /\b(?:try again|retry|do it|go ahead|proceed|please do)\b/i.test(current);
   const priorFixRequest = priorMessages.some(text => !isQuestionOrRefusal(text) && hasFix(text));
-  return (hasFix(current) && (hasCi(current) || hasCi(prior))) || ((followup || hasCi(current)) && priorFixRequest && (hasCi(current) || hasCi(prior)));
+  return (hasFix(current) && (hasCi(current) || hasCi(prior) || !!referencedAlert)) || ((followup || hasCi(current)) && priorFixRequest && (hasCi(current) || hasCi(prior) || !!referencedAlert));
+}
+
+async function nearbyDemosAlert(event: SlackEvent, messages: Message[]): Promise<DemoFailure | null> {
+  if (event.user !== process.env.GANDALF_SEARCH_OWNER || event.type !== 'app_mention' || event.channel !== 'C0CGVHH8R46') return null;
+  const text = event.text.replace(/<@[A-Z0-9]+>/gi, '').trim();
+  if (!/\b(?:fix|repair|resolve|try again|retry)\b/i.test(text)) return null;
+  let candidates = messages;
+  if (!event.thread_ts && /\b(?:this|that|it)\b/i.test(text)) {
+    try {
+      const result = await slack('conversations.history', { channel: event.channel, latest: event.ts, inclusive: 'true', limit: '15' }, process.env.SLACK_BOT_TOKEN!);
+      candidates = Array.isArray(result.messages) ? result.messages : [];
+    } catch { return null; }
+  }
+  return candidates.filter(message => message.ts && Number(message.ts) < Number(event.ts)).sort((a, b) => Number(b.ts) - Number(a.ts)).map(message => parseDemoFailure({ channel: event.channel, ts: message.ts, text: message.text })).find(Boolean) || null;
 }
 
 async function threadContext(event: SlackEvent): Promise<Message[]> {
@@ -150,6 +165,10 @@ export async function handleMention(eventId: string, event: SlackEvent, options:
   try {
     if (!process.env.OPENAI_API_KEY || !token) throw new Error('Gandalf is missing its API credentials');
     const messages = await threadContext(event);
+    const contextualAlert = await nearbyDemosAlert(event, messages);
+    if (contextualAlert && !messages.some(message => message.ts === contextualAlert.messageTs)) {
+      messages.unshift({ user: 'nearby-channel-alert', ts: contextualAlert.messageTs, text: `A nearby channel alert reports a demos CI failure: https://github.com/superdoc/demos/actions/runs/${contextualAlert.runId}/attempts/${contextualAlert.attempt}` });
+    }
     let route = await chooseReasoning(messages, await getConversation(event.channel), event.text);
     console.info(`Gandalf reasoning route: ${route.tier}`);
     const planPromise = respond(messages, event, route, undefined, [], false, options.allowSchedule !== false).then(value => ({ value }), error => ({ error }));
@@ -250,10 +269,11 @@ export async function handleMention(eventId: string, event: SlackEvent, options:
       if ((task.action === 'search' || task.action === 'browse' || task.action === 'consult') && searchHistory.length >= searchLimit) throw new Error('OpenAI requested a search beyond the limit');
     }
     if (task.action === 'fix_ci') {
-      if (!canRequestDemosCiFix(event, messages)) { await post('Please have the configured owner ask me directly to fix the demos CI.'); return; }
+      const alert = contextualAlert;
+      if (!canRequestDemosCiFix(event, messages, alert)) { await post('Please ask me directly which demos CI failure you want me to fix.'); return; }
       if (/github\.com\/superdoc\/demos\/(?:pull|actions\/runs)\//i.test(event.text)) { await post('I currently locate failures on the latest main commit; I cannot target a specific PR or run yet.'); return; }
       if (progressTs) { try { await slack('chat.update', { channel: event.channel, ts: progressTs, markdown_text: 'I’m checking the current demos CI failure and investigating a possible fix.' }, token); } catch { console.error('Gandalf could not update CI progress'); } }
-      const result = await proposeDemosCiFix();
+      const result = await proposeDemosCiFix(alert ? { runId: alert.runId, attempt: alert.attempt } : undefined);
       if (result.pullRequest && result.number) {
         await post(`${result.existing ? 'Found existing PR' : 'Opened draft PR'} [#${result.number}](${result.pullRequest}) for the [failed run](${result.runUrl}). ${safeMarkdown(String(result.coverage || 'Review the PR and its CI before merging.'))}`);
       } else {

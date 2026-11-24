@@ -7,18 +7,18 @@ process.env.GANTT_DATA_DIR = await mkdtemp(join(tmpdir(), 'gandalf-ci-'));
 Object.assign(process.env, { OPENAI_API_KEY: 'test', SLACK_BOT_TOKEN: 'test', GANDALF_SEARCH_OWNER: 'UOWNER', GANDALF_DEMOS_GITHUB_TOKEN: 'test-token' });
 const { handleMention } = await import('../src/services/gandalf.js');
 test('CI fixing accepts the owner’s DM or @mention, including an owner-authored thread follow-up', async () => {
-  const original = globalThis.fetch; const posts: string[] = []; let github = 0; let priorUser = 'UOWNER';
+  const original = globalThis.fetch; const posts: string[] = []; let github = 0; let priorUser = 'UOWNER'; let nearbyAlert = false;
   const answer = (v: unknown) => Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(v) }] }] });
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     const u = String(url);
-    if (u.includes('conversations.history')) return Response.json({ ok: true, messages: [] });
+    if (u.includes('conversations.history')) return Response.json({ ok: true, messages: nearbyAlert ? [{ ts: '1794931500.000001', text: ':x: SuperDoc demos FAILURE https://github.com/superdoc/demos/actions/runs/123/attempts/2' }] : [] });
     if (u.includes('conversations.replies')) return Response.json({ ok: true, messages: [
       { user: priorUser, ts: '1794931500.000001', text: '<@UBOT> fix this' },
       { user: priorUser, ts: '1794931550.000001', text: 'demo gallery ci failed' },
       { user: 'UOWNER', ts: '1794931600.000001', text: '<@UBOT> try again' },
     ] });
     if (u.includes('chat.postMessage')) { posts.push(JSON.parse(String(init?.body)).markdown_text); return Response.json({ ok: true }); }
-    if (u.includes('openai.com')) { const b = JSON.parse(String(init?.body)); if (b.text.format.name === 'reasoning_route') return answer({ tier: 'low' }); return answer({ action: 'fix_ci', reply: '', tasks: [] }); }
+    if (u.includes('openai.com')) { const b = JSON.parse(String(init?.body)); if (b.text.format.name === 'reasoning_route') return answer({ tier: 'low' }); if (nearbyAlert) assert.match(JSON.stringify(JSON.parse(b.input).conversation), /runs\/123\/attempts\/2/); return answer({ action: 'fix_ci', reply: '', tasks: [] }); }
     if (u.includes('api.github.com')) { github++; if (u.endsWith('/commits/main')) return Response.json({ sha: 'a'.repeat(40) }); return Response.json({ workflow_runs: [] }); }
     throw new Error('Unexpected request');
   }) as typeof fetch;
@@ -33,5 +33,8 @@ test('CI fixing accepts the owner’s DM or @mention, including an owner-authore
     priorUser = 'UOTHER';
     await handleMention('UntrustedFollowup', { ...base, type: 'app_mention', channel_type: 'channel', channel: 'C1', thread_ts: '1794931500.000001', user: 'UOWNER', text: '<@UBOT> try again' }); assert.equal(github, 6);
     await handleMention('NotMentioned', { ...base, channel_type: 'channel', channel: 'C1', user: 'UOWNER' }); assert.equal(github, 6);
+    nearbyAlert = true;
+    await handleMention('Nearby', { ...base, type: 'app_mention', channel_type: 'channel', channel: 'C0CGVHH8R46', user: 'UOWNER', text: '<@UBOT> fix this' });
+    assert.equal(github, 8); assert.match(posts.at(-1)!, /no longer a current failing/); assert.match(posts.at(-1)!, /runs\/123\/attempts\/2/);
   } finally { globalThis.fetch = original; await rm(process.env.GANTT_DATA_DIR!, { recursive: true, force: true }); }
 });

@@ -25,7 +25,7 @@ test('verified current CI failure yields an isolated draft PR without executing 
     throw new Error('Unexpected request');
   }) as typeof fetch;
   try {
-    const result = await proposeDemosCiFix();
+    const result = await proposeDemosCiFix({ runId: '123', attempt: 1 });
     assert.equal(result.number, 44); assert.match(String(result.coverage), /no local tests/i);
     assert.equal(writes.at(-1)!.body.draft, true); assert.equal(writes.at(-1)!.body.base, 'main');
     assert.match(writes.find(x => x.url.endsWith('/git/refs'))!.body.ref, /^refs\/heads\/gandalf\/ci-123-1-/);
@@ -55,4 +55,19 @@ test('does not act on a failure superseded by a successful run', async () => {
   }) as typeof fetch;
   try { const result = await proposeDemosCiFix(); assert.match(String(result.error), /No current failing/); assert.equal(writes, 0); }
   finally { globalThis.fetch = original; delete process.env.GANDALF_DEMOS_GITHUB_TOKEN; }
+});
+
+test('an alert cannot cause a fix for a different run or attempt', async () => {
+  const original = globalThis.fetch; process.env.GANDALF_DEMOS_GITHUB_TOKEN = 'test-token'; let writes = 0;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    if (init?.method === 'POST') writes++;
+    if (String(url).endsWith('/commits/main')) return Response.json({ sha });
+    return Response.json({ workflow_runs: [run] });
+  }) as typeof fetch;
+  try {
+    for (const target of [{ runId: '999', attempt: 1 }, { runId: '123', attempt: 2 }]) {
+      const result = await proposeDemosCiFix(target); assert.match(String(result.error), /no longer a current failing/);
+    }
+    assert.equal(writes, 0);
+  } finally { globalThis.fetch = original; delete process.env.GANDALF_DEMOS_GITHUB_TOKEN; }
 });
