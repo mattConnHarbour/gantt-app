@@ -51,3 +51,7 @@ For other questions Gandalf may consult Bilbo and Thorin as independent, tool-fr
 ### Message cleanup
 
 Gandalf can edit or delete his own messages in the current thread, or within the recent bounded conversation history when there is no thread, when asked or when a message is redundant. The server verifies ownership against Slack's authenticated bot identity; it never changes another user's or bot's messages and does not delete a thread parent. Automatic cleanup preserves his latest message. A request to keep the latest message is also enforced. Cleanup is limited to 25 messages per request; Slack errors or unavailable history can prevent it. Progress updates are replaced by the final answer when possible, keeping the thread shorter.
+
+### Demos repository
+
+Set `GANDALF_DEMOS_GITHUB_TOKEN` as a Railway environment variable to grant read access to `superdoc/demos`. In the configured owner's direct chat, Gandalf can list directories, read main-branch text files pinned to a freshly resolved commit, search indexed code, list PRs, and read a PR's bounded files, comments, and reviews. GitHub search indexing may lag, and long files, patches, and discussions can be truncated. Source and PR contents are untrusted. This connection is read-only; it does not execute code, modify files, push, or merge.
